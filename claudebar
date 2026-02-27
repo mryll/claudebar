@@ -200,20 +200,20 @@ countdown() {
 # Outputs: elapsed_pct pace_icon pace_label
 calc_pacing() {
     local usage_pct=$1 resets_at=$2 window_s=$3
-    local elapsed_pct=0 pace_icon="→" pace_label="on track"
+    local elapsed_pct=0 pace_icon="" pace_label=""
 
-    if [[ -n "$resets_at" ]]; then
+    if [[ -n "$resets_at" && "$resets_at" != "0" && "$resets_at" != "null" ]] && (( window_s > 0 )); then
         local reset_epoch now_epoch ms_left
-        reset_epoch=$(date -d "$resets_at" +%s 2>/dev/null) || { echo "0 → on track"; return; }
+        reset_epoch=$(date -d "$resets_at" +%s 2>/dev/null) || { echo "0  "; return; }
         now_epoch=$(date +%s)
         ms_left=$(( reset_epoch - now_epoch ))
         elapsed_pct=$(( (window_s - ms_left) * 100 / window_s ))
         (( elapsed_pct < 0 )) && elapsed_pct=0
         (( elapsed_pct > 100 )) && elapsed_pct=100
 
-        if (( elapsed_pct > 0 )); then
-            # pacing = actual / expected. >tolerance = ahead, <tolerance = under
-            # Using integer math: pacing*100 = usage_pct * 100 / elapsed_pct
+        if (( elapsed_pct >= 5 )); then
+            pace_icon="→"
+            pace_label="on track"
             local pacing_x100=$(( usage_pct * 100 / elapsed_pct ))
             if (( pacing_x100 > 100 + PACE_TOLERANCE )); then
                 local dev=$(( pacing_x100 - 100 ))
