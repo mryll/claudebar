@@ -29,6 +29,12 @@ Waybar widget that shows your Claude AI usage limits -- session, weekly, and per
 
 ## Installation
 
+### Arch Linux (AUR)
+
+```bash
+yay -S claudebar
+```
+
 ### From source
 
 ```bash
