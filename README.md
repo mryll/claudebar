@@ -297,7 +297,7 @@ API responses are cached in `~/.cache/claudebar/usage.json` for 60 seconds. This
 | 75-89% | Orange (`#d19a66`) | `high` |
 | 90-100% | Red (`#e06c75`) | `critical` |
 
-These colors follow the One Dark theme. Edit the script to customize them.
+To override these defaults, use `--color-*` flags (see [Colors](#colors)).
 
 ## License
 

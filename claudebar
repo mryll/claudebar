@@ -4,6 +4,7 @@
 # with colored progress bars and Pango markup tooltip.
 #
 # Usage: claudebar [--format FORMAT] [--tooltip-format FORMAT] [--pace-tolerance N]
+#                  [--color-low HEX] [--color-mid HEX] [--color-high HEX] [--color-critical HEX]
 #
 # Format placeholders:
 #   {icon}              󰚩 icon (Nerd Font)
@@ -500,6 +501,7 @@ case "$class" in
     mid)      bar_fg="$BAR_COLOR_MID" ;;
     high)     bar_fg="$BAR_COLOR_HIGH" ;;
     critical) bar_fg="$BAR_COLOR_CRITICAL" ;;
+    *)        bar_fg="$BAR_COLOR_LOW" ;;
 esac
 bar_text="<span foreground='${bar_fg}'>${bar_text}</span>"
 
