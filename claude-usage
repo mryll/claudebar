@@ -119,10 +119,10 @@ WEEKLY_WINDOW=$(( 7 * 24 * 3600 ))  # 7 days
 
 die() {
     if command -v jq &>/dev/null; then
-        jq -nc --arg t "󰚩 ⚠" --arg tip "$1" '{text:$t, tooltip:$tip, class:"critical"}'
+        jq -nc --arg t "⚠" --arg tip "$1" '{text:$t, tooltip:$tip, class:"critical"}'
     else
         local _m="${1//\\/\\\\}"; _m="${_m//\"/\\\"}"
-        printf '{"text":"󰚩 ⚠","tooltip":"%s","class":"critical"}\n' "$_m"
+        printf '{"text":"⚠","tooltip":"%s","class":"critical"}\n' "$_m"
     fi
     exit 0
 }
@@ -252,6 +252,7 @@ _do_refresh_and_fetch() {
                 printf '%s' "$_usage" > "$_ctmp" && mv "$_ctmp" "$CACHE_DIR/usage.json"
                 rm -f "$CACHE_DIR/.stale"
             fi
+            pkill -RTMIN+13 waybar 2>/dev/null || true
             return 0
         fi
     done
@@ -305,7 +306,7 @@ elif [[ "$auth_ok" == "false" ]]; then
         if (( stale_age > SESSION_WINDOW )); then
             rm -f "$cache_file" "$stale_marker"
             if [[ "$syncing" == "true" ]]; then
-                jq -nc '{text:"󰚩 ↻", tooltip:"Syncing with Claude...", class:"low"}'
+                jq -nc '{text:"↻", tooltip:"Syncing with Claude...", class:"low"}'
                 exit 0
             fi
             die "Session expired.\nRun <b>claude</b> to re-login."
@@ -320,7 +321,7 @@ elif [[ "$auth_ok" == "false" ]]; then
         fi
     else
         if [[ "$syncing" == "true" ]]; then
-            jq -nc '{text:"󰚩 ↻", tooltip:"Syncing with Claude...", class:"low"}'
+            jq -nc '{text:"↻", tooltip:"Syncing with Claude...", class:"low"}'
             exit 0
         fi
         die "Session expired.\nRun <b>claude</b> to re-login."
@@ -492,11 +493,11 @@ else
     lines+=("CENTER<span font_weight='bold' foreground='${BLUE}'>Claude ${plan}</span>")
     lines+=("SEP")
     lines+=("")
-    lines+=(" <span foreground='${FG}'>  󰔟  Session</span>            <span font_weight='bold' foreground='${s_color}'>${session_pct}%</span>")
+    lines+=(" <span foreground='${FG}'>  󰔟  Session</span>            <span font_weight='bold' foreground='${s_color}'>${session_pct}% ${session_pace}</span>")
     lines+=("   ${s_bar}")
     lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${s_cd}</span>")
     lines+=("")
-    lines+=(" <span foreground='${FG}'>  󰃰  Weekly</span>             <span font_weight='bold' foreground='${w_color}'>${weekly_pct}%</span>")
+    lines+=(" <span foreground='${FG}'>  󰃰  Weekly</span>             <span font_weight='bold' foreground='${w_color}'>${weekly_pct}% ${weekly_pace}</span>")
     lines+=("   ${w_bar}")
     lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${w_cd}</span>")
 
