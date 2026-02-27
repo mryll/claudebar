@@ -503,7 +503,7 @@ case "$class" in
     critical) bar_fg="$BAR_COLOR_CRITICAL" ;;
     *)        bar_fg="$BAR_COLOR_LOW" ;;
 esac
-bar_text="<span foreground='${bar_fg}'>${bar_text}</span>"
+bar_text="<span foreground='${bar_fg}'><span font='Font Awesome 7 Brands'>&#xe861;</span> ${bar_text}</span>"
 
 # --- Tooltip ---
 if [[ -n "$TOOLTIP_FORMAT" ]]; then
