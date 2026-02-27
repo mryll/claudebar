@@ -1,4 +1,4 @@
-# waybar-claude-usage
+# claudebar
 
 Waybar widget that shows your Claude AI usage limits -- session, weekly, and per-model -- with colored progress bars and countdown timers.
 
@@ -32,8 +32,8 @@ Waybar widget that shows your Claude AI usage limits -- session, weekly, and per
 ### From source
 
 ```bash
-git clone https://github.com/mryll/waybar-claude-usage.git
-cd waybar-claude-usage
+git clone https://github.com/mryll/claudebar.git
+cd claudebar
 make install PREFIX=~/.local
 ```
 
@@ -52,8 +52,8 @@ make uninstall PREFIX=~/.local
 ### Quick install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mryll/waybar-claude-usage/main/claude-usage \
-  -o ~/.local/bin/claude-usage && chmod +x ~/.local/bin/claude-usage
+curl -fsSL https://raw.githubusercontent.com/mryll/claudebar/main/claudebar \
+  -o ~/.local/bin/claudebar && chmod +x ~/.local/bin/claudebar
 ```
 
 ## Waybar configuration
@@ -61,11 +61,11 @@ curl -fsSL https://raw.githubusercontent.com/mryll/waybar-claude-usage/main/clau
 Add the module to your `~/.config/waybar/config.jsonc`:
 
 ```jsonc
-"modules-right": ["custom/claude-usage", ...],
+"modules-right": ["custom/claudebar", ...],
 
 // Without icon (default)
-"custom/claude-usage": {
-    "exec": "claude-usage",
+"custom/claudebar": {
+    "exec": "claudebar",
     "return-type": "json",
     "interval": 60,
     "tooltip": true,
@@ -80,8 +80,8 @@ You can add any icon via waybar's `format` field. The `{}` placeholder is replac
 **No icon** (default):
 
 ```jsonc
-"custom/claude-usage": {
-    "exec": "claude-usage",
+"custom/claudebar": {
+    "exec": "claudebar",
     "return-type": "json",
     "interval": 60,
     "tooltip": true,
@@ -93,8 +93,8 @@ You can add any icon via waybar's `format` field. The `{}` placeholder is replac
 **Nerd Font icon** (any Nerd Font glyph):
 
 ```jsonc
-"custom/claude-usage": {
-    "exec": "claude-usage",
+"custom/claudebar": {
+    "exec": "claudebar",
     "format": "󰚩 {}",
     "return-type": "json",
     "interval": 60,
@@ -107,8 +107,8 @@ You can add any icon via waybar's `format` field. The `{}` placeholder is replac
 **Claude brand icon** (requires [Font Awesome](https://fontawesome.com/) ≥ 7.2.0 OTF):
 
 ```jsonc
-"custom/claude-usage": {
-    "exec": "claude-usage",
+"custom/claudebar": {
+    "exec": "claudebar",
     "format": "<span font='Font Awesome 7 Brands'>\ue861</span> {}",
     "return-type": "json",
     "interval": 60,
@@ -126,24 +126,24 @@ You can add any icon via waybar's `format` field. The `{}` placeholder is replac
 Add to your `~/.config/waybar/style.css`:
 
 ```css
-#custom-claude-usage {
+#custom-claudebar {
     margin: 0 8px;
     font-size: 11px;
 }
 
-#custom-claude-usage.low {
+#custom-claudebar.low {
     color: #98c379;
 }
 
-#custom-claude-usage.mid {
+#custom-claudebar.mid {
     color: #e5c07b;
 }
 
-#custom-claude-usage.high {
+#custom-claudebar.high {
     color: #d19a66;
 }
 
-#custom-claude-usage.critical {
+#custom-claudebar.critical {
     color: #e06c75;
 }
 ```
@@ -160,23 +160,23 @@ Use `--format` to control what the widget outputs as bar text:
 
 ```bash
 # Default (session usage + countdown)
-claude-usage
+claudebar
 # => 42% · 1h 30m
 
 # Weekly usage
-claude-usage --format '{weekly_pct}% · {weekly_reset}'
+claudebar --format '{weekly_pct}% · {weekly_reset}'
 # => 27% · 4d 1h
 
 # Session + weekly
-claude-usage --format 'S:{session_pct}% W:{weekly_pct}%'
+claudebar --format 'S:{session_pct}% W:{weekly_pct}%'
 # => S:42% W:27%
 
 # With pacing indicator
-claude-usage --format '{session_pct}% {session_pace} · {session_reset}'
+claudebar --format '{session_pct}% {session_pace} · {session_reset}'
 # => 42% ↑ · 1h 30m
 
 # Minimal
-claude-usage --format '{session_pct}%'
+claudebar --format '{session_pct}%'
 # => 42%
 ```
 
@@ -187,14 +187,14 @@ claude-usage --format '{session_pct}%'
 Use `--tooltip-format` for a custom plain-text tooltip (overrides the default rich tooltip):
 
 ```bash
-claude-usage --tooltip-format 'Session: {session_pct}% ({session_reset}) | Weekly: {weekly_pct}% ({weekly_reset})'
+claudebar --tooltip-format 'Session: {session_pct}% ({session_reset}) | Weekly: {weekly_pct}% ({weekly_reset})'
 ```
 
 Pass the format in your waybar config:
 
 ```jsonc
-"custom/claude-usage": {
-    "exec": "claude-usage --format '{session_pct}% {session_pace}'",
+"custom/claudebar": {
+    "exec": "claudebar --format '{session_pct}% {session_pace}'",
     "return-type": "json",
     "interval": 60,
     "tooltip": true,
@@ -227,11 +227,44 @@ Pass the format in your waybar config:
 
 ### Pacing indicators
 
-Pacing compares your actual usage against where you "should" be based on elapsed time in the window:
+Pacing compares your actual usage against where you "should" be if you spread your quota evenly across the window. It answers: "at this rate, will I run out before the window resets?"
 
 - **↑** -- ahead of pace (using faster than sustainable)
 - **→** -- on track
 - **↓** -- under pace (plenty of room left)
+
+**How it works:** if 30% of the session time has elapsed, you "should" have used ~30% of your quota. The widget divides your actual usage by the expected usage and flags deviations beyond a tolerance band:
+
+| Scenario | Time elapsed | Usage | Pacing | Icon |
+|---|---|---|---|---|
+| Burning through quota | 25% | 60% | 140% ahead | ↑ |
+| Slightly ahead | 50% | 52% | on track (within tolerance) | → |
+| Perfectly even | 50% | 50% | on track | → |
+| Conserving | 70% | 30% | 57% under | ↓ |
+
+By default the tolerance is **±5%** -- deviations of 5% or less show as "on track" to avoid noise. `--pace-tolerance` accepts a non-negative integer (e.g. 0–50). You can tune it like this:
+
+```bash
+# More sensitive (±2%) -- flags smaller deviations
+claudebar --pace-tolerance 2
+
+# More relaxed (±10%) -- only flags large deviations
+claudebar --pace-tolerance 10
+
+# Default (±5%)
+claudebar
+```
+
+In your waybar config:
+
+```jsonc
+"custom/claudebar": {
+    "exec": "claudebar --pace-tolerance 3",
+    "return-type": "json",
+    "interval": 60,
+    "tooltip": true
+}
+```
 
 The `{session_pace_pct}` / `{weekly_pace_pct}` placeholders show the deviation (e.g. "12% ahead", "5% under", "on track").
 
@@ -246,7 +279,7 @@ The tooltip shows colored progress bars for each usage window (session, weekly, 
 
 ### Cache
 
-API responses are cached in `~/.cache/claude-usage/usage.json` for 60 seconds. This keeps the widget fast (~40ms from cache vs ~1s from API), which matters if you run multiple Waybar instances (e.g. multi-monitor).
+API responses are cached in `~/.cache/claudebar/usage.json` for 60 seconds. This keeps the widget fast (~40ms from cache vs ~1s from API), which matters if you run multiple Waybar instances (e.g. multi-monitor).
 
 ## Troubleshooting
 

@@ -2,9 +2,9 @@ PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 
 install:
-	install -Dm755 claude-usage $(DESTDIR)$(BINDIR)/claude-usage
+	install -Dm755 claudebar $(DESTDIR)$(BINDIR)/claudebar
 
 uninstall:
-	rm -f $(DESTDIR)$(BINDIR)/claude-usage
+	rm -f $(DESTDIR)$(BINDIR)/claudebar
 
 .PHONY: install uninstall

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# claude-usage — Claude AI plan usage widget for Waybar
+# claudebar — Claude AI plan usage widget for Waybar
 # Reads OAuth credentials from Claude CLI, shows session/weekly limits
 # with colored progress bars and Pango markup tooltip.
 #
-# Usage: claude-usage [--format FORMAT] [--tooltip-format FORMAT]
+# Usage: claudebar [--format FORMAT] [--tooltip-format FORMAT] [--pace-tolerance N]
 #
 # Format placeholders:
 #   {icon}              󰚩 icon (Nerd Font)
@@ -32,6 +32,7 @@ set -euo pipefail
 # --- Parse args ---
 FORMAT="{session_pct}% · {session_reset}"
 TOOLTIP_FORMAT=""
+PACE_TOLERANCE=5
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --format)
@@ -40,16 +41,21 @@ while [[ $# -gt 0 ]]; do
         --tooltip-format)
             [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--tooltip-format requires a value","class":"critical"}'; exit 0; }
             TOOLTIP_FORMAT="$2"; shift 2 ;;
+        --pace-tolerance)
+            [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--pace-tolerance requires a value","class":"critical"}'; exit 0; }
+            PACE_TOLERANCE="$2"; shift 2 ;;
         *) _o="${1//\\/\\\\}"; _o="${_o//\"/\\\"}"; echo '{"text":"⚠","tooltip":"Unknown option: '"$_o"'","class":"critical"}'; exit 0 ;;
     esac
 done
+[[ "$PACE_TOLERANCE" =~ ^[0-9]+$ ]] || { echo '{"text":"⚠","tooltip":"--pace-tolerance must be a non-negative integer","class":"critical"}'; exit 0; }
+PACE_TOLERANCE=$((10#$PACE_TOLERANCE))
 
 CREDS="$HOME/.claude/.credentials.json"
 API_URL="https://api.anthropic.com/api/oauth/usage"
 TOKEN_URL="https://console.anthropic.com/v1/oauth/token"
 CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e" # Claude CLI OAuth client ID
 REFRESH_BUFFER=300 # refresh 5 min before expiry
-CACHE_DIR="$HOME/.cache/claude-usage"
+CACHE_DIR="$HOME/.cache/claudebar"
 CACHE_TTL=60 # seconds
 
 # --- Theme colors ---
@@ -182,15 +188,15 @@ calc_pacing() {
         (( elapsed_pct > 100 )) && elapsed_pct=100
 
         if (( elapsed_pct > 0 )); then
-            # pacing = actual / expected. >1.05 = ahead, <0.95 = under
+            # pacing = actual / expected. >tolerance = ahead, <tolerance = under
             # Using integer math: pacing*100 = usage_pct * 100 / elapsed_pct
             local pacing_x100=$(( usage_pct * 100 / elapsed_pct ))
-            if (( pacing_x100 > 105 )); then
-                local dev=$(( (pacing_x100 - 100) ))
+            if (( pacing_x100 > 100 + PACE_TOLERANCE )); then
+                local dev=$(( pacing_x100 - 100 ))
                 pace_icon="↑"
                 pace_label="${dev}% ahead"
-            elif (( pacing_x100 < 95 )); then
-                local dev=$(( (100 - pacing_x100) ))
+            elif (( pacing_x100 < 100 - PACE_TOLERANCE )); then
+                local dev=$(( 100 - pacing_x100 ))
                 pace_icon="↓"
                 pace_label="${dev}% under"
             fi
