@@ -365,10 +365,13 @@ read -r weekly_elapsed weekly_pace _discard <<< "$_w_pace"
 weekly_pace_pct=$(cut -d' ' -f3- <<< "$_w_pace")
 
 # --- Waybar class (granular: low, mid, high, critical) ---
+# Rate limits first; extra usage only matters when a rate limit hits 100%
 max_pct=$session_pct
 (( weekly_pct > max_pct )) && max_pct=$weekly_pct
 (( sonnet_pct > max_pct )) && max_pct=$sonnet_pct
-(( extra_pct > max_pct )) && max_pct=$extra_pct
+if (( session_pct >= 100 || weekly_pct >= 100 || sonnet_pct >= 100 )); then
+    (( extra_pct > max_pct )) && max_pct=$extra_pct
+fi
 
 class=""
 if   (( max_pct >= 90 )); then class="critical"
