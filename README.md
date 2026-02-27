@@ -127,38 +127,29 @@ You can add any icon via waybar's `format` field. The `{}` placeholder is replac
 > The WOFF2 variant (`woff2-font-awesome`) does not render in Waybar due to a
 > [Pango compatibility issue](https://github.com/Alexays/Waybar/issues/4381).
 
-### CSS styling (optional)
+### Colors
 
-Add to your `~/.config/waybar/style.css`:
+The bar text is colored by severity level out of the box (One Dark palette):
 
-```css
-#custom-claudebar {
-    margin: 0 8px;
-    font-size: 11px;
-}
+| Class | Range | Default color |
+|---|---|---|
+| `low` | 0-49% | `#98c379` (green) |
+| `mid` | 50-74% | `#e5c07b` (yellow) |
+| `high` | 75-89% | `#d19a66` (orange) |
+| `critical` | 90-100% | `#e06c75` (red) |
 
-#custom-claudebar.low {
-    color: #98c379;
-}
+To override, pass `--color-*` flags in the `exec` field:
 
-#custom-claudebar.mid {
-    color: #e5c07b;
-}
-
-#custom-claudebar.high {
-    color: #d19a66;
-}
-
-#custom-claudebar.critical {
-    color: #e06c75;
+```jsonc
+"custom/claudebar": {
+    "exec": "claudebar --color-low '#50fa7b' --color-critical '#ff5555'",
+    ...
 }
 ```
 
-Then restart Waybar:
+Available flags: `--color-low`, `--color-mid`, `--color-high`, `--color-critical`.
 
-```bash
-killall waybar && waybar &
-```
+CSS classes (`low`, `mid`, `high`, `critical`) are also emitted for additional styling via `~/.config/waybar/style.css`.
 
 ## Format customization
 

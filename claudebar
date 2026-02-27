@@ -33,6 +33,10 @@ set -euo pipefail
 FORMAT="{session_pct}% · {session_reset}"
 TOOLTIP_FORMAT=""
 PACE_TOLERANCE=5
+BAR_COLOR_LOW=""
+BAR_COLOR_MID=""
+BAR_COLOR_HIGH=""
+BAR_COLOR_CRITICAL=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --format)
@@ -44,6 +48,14 @@ while [[ $# -gt 0 ]]; do
         --pace-tolerance)
             [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--pace-tolerance requires a value","class":"critical"}'; exit 0; }
             PACE_TOLERANCE="$2"; shift 2 ;;
+        --color-low)       [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--color-low requires a value","class":"critical"}'; exit 0; }
+                           BAR_COLOR_LOW="$2"; shift 2 ;;
+        --color-mid)       [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--color-mid requires a value","class":"critical"}'; exit 0; }
+                           BAR_COLOR_MID="$2"; shift 2 ;;
+        --color-high)      [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--color-high requires a value","class":"critical"}'; exit 0; }
+                           BAR_COLOR_HIGH="$2"; shift 2 ;;
+        --color-critical)  [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--color-critical requires a value","class":"critical"}'; exit 0; }
+                           BAR_COLOR_CRITICAL="$2"; shift 2 ;;
         *) _o="${1//\\/\\\\}"; _o="${_o//\"/\\\"}"; echo '{"text":"⚠","tooltip":"Unknown option: '"$_o"'","class":"critical"}'; exit 0 ;;
     esac
 done
@@ -115,6 +127,13 @@ DIM="#5c6370"
 FG="#abb2bf"
 BAR_EMPTY="#3e4451"
 load_theme_colors
+
+# Bar text colors: CLI overrides > theme > One Dark defaults
+[[ -n "$BAR_COLOR_LOW" ]]      || BAR_COLOR_LOW="$GREEN"
+[[ -n "$BAR_COLOR_MID" ]]      || BAR_COLOR_MID="$YELLOW"
+[[ -n "$BAR_COLOR_HIGH" ]]     || BAR_COLOR_HIGH="$ORANGE"
+[[ -n "$BAR_COLOR_CRITICAL" ]] || BAR_COLOR_CRITICAL="$RED"
+
 BAR_LEN=20
 
 # Window durations in seconds
@@ -474,6 +493,15 @@ elif [[ -f "$stale_marker" ]]; then
 fi
 
 bar_text=$(apply_format "$FORMAT")${stale_icon}
+
+# --- Colorize bar text via Pango ---
+case "$class" in
+    low)      bar_fg="$BAR_COLOR_LOW" ;;
+    mid)      bar_fg="$BAR_COLOR_MID" ;;
+    high)     bar_fg="$BAR_COLOR_HIGH" ;;
+    critical) bar_fg="$BAR_COLOR_CRITICAL" ;;
+esac
+bar_text="<span foreground='${bar_fg}'>${bar_text}</span>"
 
 # --- Tooltip ---
 if [[ -n "$TOOLTIP_FORMAT" ]]; then
