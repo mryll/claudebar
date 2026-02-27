@@ -52,7 +52,54 @@ REFRESH_BUFFER=300 # refresh 5 min before expiry
 CACHE_DIR="$HOME/.cache/claude-usage"
 CACHE_TTL=60 # seconds
 
-# --- Colors (One Dark) ---
+# --- Theme colors ---
+# Blend two hex colors (#RRGGBB) by averaging their RGB components
+hex_blend() {
+    local c1="${1#\#}" c2="${2#\#}"
+    local r1=$((16#${c1:0:2})) g1=$((16#${c1:2:2})) b1=$((16#${c1:4:2}))
+    local r2=$((16#${c2:0:2})) g2=$((16#${c2:2:2})) b2=$((16#${c2:4:2}))
+    printf '#%02x%02x%02x' $(( (r1+r2)/2 )) $(( (g1+g2)/2 )) $(( (b1+b2)/2 ))
+}
+
+load_theme_colors() {
+    local theme_file="$HOME/.config/omarchy/current/theme/colors.toml"
+    if [[ -f "$theme_file" ]]; then
+        local accent="" foreground="" background="" color1="" color2="" color3=""
+        while IFS= read -r line; do
+            # Skip comments and empty lines
+            [[ "$line" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "${line// /}" ]] && continue
+            # Parse key = "value"
+            if [[ "$line" =~ ^[[:space:]]*([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*=[[:space:]]*\"([^\"]*)\" ]]; then
+                local key="${BASH_REMATCH[1]}" val="${BASH_REMATCH[2]}"
+                case "$key" in
+                    accent)     accent="$val" ;;
+                    foreground) foreground="$val" ;;
+                    background) background="$val" ;;
+                    color1)     color1="$val" ;;
+                    color2)     color2="$val" ;;
+                    color3)     color3="$val" ;;
+                esac
+            fi
+        done < "$theme_file"
+        # Map theme colors to widget colors
+        [[ -n "$accent" ]]     && BLUE="$accent"
+        [[ -n "$foreground" ]] && FG="$foreground"
+        [[ -n "$color1" ]]     && { RED="$color1"; ORANGE="$color1"; }
+        [[ -n "$color2" ]]     && GREEN="$color2"
+        [[ -n "$color3" ]]     && YELLOW="$color3"
+        # DIM = midpoint between foreground and background
+        if [[ -n "$foreground" && -n "$background" ]]; then
+            DIM=$(hex_blend "$foreground" "$background")
+        fi
+        # BAR_EMPTY = slightly lighter than background (blend bg with dim)
+        if [[ -n "$background" ]]; then
+            BAR_EMPTY=$(hex_blend "$background" "$DIM")
+        fi
+    fi
+}
+
+# One Dark defaults (overridden by Omarchy theme if available)
 GREEN="#98c379"
 YELLOW="#e5c07b"
 ORANGE="#d19a66"
@@ -61,6 +108,7 @@ BLUE="#61afef"
 DIM="#5c6370"
 FG="#abb2bf"
 BAR_EMPTY="#3e4451"
+load_theme_colors
 BAR_LEN=20
 
 # Window durations in seconds
