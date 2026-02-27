@@ -81,46 +81,26 @@ Add the module to your `~/.config/waybar/config.jsonc`:
 
 ### Adding an icon
 
-You can add any icon via waybar's `format` field. The `{}` placeholder is replaced with the widget text.
+Use `--icon` to prepend an icon to the widget text. The icon inherits the same color as the usage text.
 
-**No icon** (default):
+**Emoji:**
 
 ```jsonc
-"custom/claudebar": {
-    "exec": "claudebar",
-    "return-type": "json",
-    "interval": 60,
-    "tooltip": true,
-    "on-click": "xdg-open https://claude.ai/settings/usage"
-}
-// => 42% · 1h 30m
+"exec": "claudebar --icon '🤖'"
+// => 🤖 42% · 1h 30m
 ```
 
-**Nerd Font icon** (any Nerd Font glyph):
+**Nerd Font glyph:**
 
 ```jsonc
-"custom/claudebar": {
-    "exec": "claudebar",
-    "format": "󰚩 {}",
-    "return-type": "json",
-    "interval": 60,
-    "tooltip": true,
-    "on-click": "xdg-open https://claude.ai/settings/usage"
-}
+"exec": "claudebar --icon '󰚩'"
 // => 󰚩 42% · 1h 30m
 ```
 
 **Claude brand icon** (requires [Font Awesome](https://fontawesome.com/) ≥ 7.2.0 OTF):
 
 ```jsonc
-"custom/claudebar": {
-    "exec": "claudebar",
-    "format": "<span font='Font Awesome 7 Brands'>\ue861</span> {}",
-    "return-type": "json",
-    "interval": 60,
-    "tooltip": true,
-    "on-click": "xdg-open https://claude.ai/settings/usage"
-}
+"exec": "claudebar --icon \"<span font='Font Awesome 7 Brands'>&#xe861;</span>\""
 ```
 
 > **Note:** On Arch Linux, install the OTF package (`sudo pacman -S otf-font-awesome`).

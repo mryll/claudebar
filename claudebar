@@ -3,7 +3,7 @@
 # Reads OAuth credentials from Claude CLI, shows session/weekly limits
 # with colored progress bars and Pango markup tooltip.
 #
-# Usage: claudebar [--format FORMAT] [--tooltip-format FORMAT] [--pace-tolerance N]
+# Usage: claudebar [--icon ICON] [--format FORMAT] [--tooltip-format FORMAT] [--pace-tolerance N]
 #                  [--color-low HEX] [--color-mid HEX] [--color-high HEX] [--color-critical HEX]
 #
 # Format placeholders:
@@ -38,8 +38,12 @@ BAR_COLOR_LOW=""
 BAR_COLOR_MID=""
 BAR_COLOR_HIGH=""
 BAR_COLOR_CRITICAL=""
+BAR_ICON=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --icon)
+            [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--icon requires a value","class":"critical"}'; exit 0; }
+            BAR_ICON="$2"; shift 2 ;;
         --format)
             [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--format requires a value","class":"critical"}'; exit 0; }
             FORMAT="$2"; shift 2 ;;
@@ -503,7 +507,7 @@ case "$class" in
     critical) bar_fg="$BAR_COLOR_CRITICAL" ;;
     *)        bar_fg="$BAR_COLOR_LOW" ;;
 esac
-bar_text="<span foreground='${bar_fg}'><span font='Font Awesome 7 Brands'>&#xe861;</span> ${bar_text}</span>"
+bar_text="<span foreground='${bar_fg}'>${BAR_ICON:+${BAR_ICON} }${bar_text}</span>"
 
 # --- Tooltip ---
 if [[ -n "$TOOLTIP_FORMAT" ]]; then
