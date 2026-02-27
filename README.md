@@ -24,7 +24,8 @@ Waybar widget that shows your Claude AI usage limits -- session, weekly, and per
 - Claude Pro or Max subscription
 - `curl`, `jq`, GNU `date` (standard on most Linux systems)
 - [Waybar](https://github.com/Alexays/Waybar)
-- A [Nerd Font](https://www.nerdfonts.com/) for icons
+- A [Nerd Font](https://www.nerdfonts.com/) for tooltip icons
+- (Optional) [Font Awesome](https://fontawesome.com/) ≥ 7.2.0 OTF for the Claude brand icon
 
 ## Installation
 
@@ -62,14 +63,65 @@ Add the module to your `~/.config/waybar/config.jsonc`:
 ```jsonc
 "modules-right": ["custom/claude-usage", ...],
 
+// Without icon (default)
 "custom/claude-usage": {
-    "exec": "~/.local/bin/claude-usage",
+    "exec": "claude-usage",
     "return-type": "json",
     "interval": 60,
     "tooltip": true,
     "on-click": "xdg-open https://claude.ai/settings/usage"
 }
 ```
+
+### Adding an icon
+
+You can add any icon via waybar's `format` field. The `{}` placeholder is replaced with the widget text.
+
+**No icon** (default):
+
+```jsonc
+"custom/claude-usage": {
+    "exec": "claude-usage",
+    "return-type": "json",
+    "interval": 60,
+    "tooltip": true,
+    "on-click": "xdg-open https://claude.ai/settings/usage"
+}
+// => 42% · 1h 30m
+```
+
+**Nerd Font icon** (any Nerd Font glyph):
+
+```jsonc
+"custom/claude-usage": {
+    "exec": "claude-usage",
+    "format": "󰚩 {}",
+    "return-type": "json",
+    "interval": 60,
+    "tooltip": true,
+    "on-click": "xdg-open https://claude.ai/settings/usage"
+}
+// => 󰚩 42% · 1h 30m
+```
+
+**Claude brand icon** (requires [Font Awesome](https://fontawesome.com/) ≥ 7.2.0 OTF):
+
+```jsonc
+"custom/claude-usage": {
+    "exec": "claude-usage",
+    "format": "<span font='Font Awesome 7 Brands'>\ue861</span> {}",
+    "return-type": "json",
+    "interval": 60,
+    "tooltip": true,
+    "on-click": "xdg-open https://claude.ai/settings/usage"
+}
+```
+
+> **Note:** On Arch Linux, install the OTF package (`sudo pacman -S otf-font-awesome`).
+> The WOFF2 variant (`woff2-font-awesome`) does not render in Waybar due to a
+> [Pango compatibility issue](https://github.com/Alexays/Waybar/issues/4381).
+
+### CSS styling (optional)
 
 Add to your `~/.config/waybar/style.css`:
 
@@ -104,7 +156,7 @@ killall waybar && waybar &
 
 ## Format customization
 
-Use `--format` to control what appears in the bar:
+Use `--format` to control what the widget outputs as bar text:
 
 ```bash
 # Default (session usage + countdown)
@@ -112,21 +164,25 @@ claude-usage
 # => 42% · 1h 30m
 
 # Weekly usage
-claude-usage --format '{icon} {weekly_pct}% · {weekly_reset}'
-# => 󰚩 27% · 4d 1h
+claude-usage --format '{weekly_pct}% · {weekly_reset}'
+# => 27% · 4d 1h
 
 # Session + weekly
-claude-usage --format '{icon} S:{session_pct}% W:{weekly_pct}%'
-# => 󰚩 S:42% W:27%
+claude-usage --format 'S:{session_pct}% W:{weekly_pct}%'
+# => S:42% W:27%
 
 # With pacing indicator
-claude-usage --format '{icon} {session_pct}% {session_pace} · {session_reset}'
-# => 󰚩 42% ↑ · 1h 30m
+claude-usage --format '{session_pct}% {session_pace} · {session_reset}'
+# => 42% ↑ · 1h 30m
 
 # Minimal
-claude-usage --format '{icon} {session_pct}%'
-# => 󰚩 42%
+claude-usage --format '{session_pct}%'
+# => 42%
 ```
+
+> **Tip:** For icons, use waybar's `format` field (see [Adding an icon](#adding-an-icon))
+> instead of embedding them in `--format`. This lets you use Pango markup to select
+> the font, which is necessary for brand icons like Font Awesome.
 
 Use `--tooltip-format` for a custom plain-text tooltip (overrides the default rich tooltip):
 
@@ -138,7 +194,7 @@ Pass the format in your waybar config:
 
 ```jsonc
 "custom/claude-usage": {
-    "exec": "~/.local/bin/claude-usage --format '{icon} {session_pct}% {session_pace}'",
+    "exec": "claude-usage --format '{session_pct}% {session_pace}'",
     "return-type": "json",
     "interval": 60,
     "tooltip": true,
