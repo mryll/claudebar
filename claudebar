@@ -533,12 +533,12 @@ else
     lines+=("CENTER<span font_weight='bold' foreground='${BLUE}'>Claude ${plan}</span>")
     lines+=("SEP")
     lines+=("")
-    lines+=(" <span foreground='${FG}'>  󰔟  Session</span>            <span font_weight='bold' foreground='${s_color}'>${session_pct}% ${session_pace}</span>")
-    lines+=("   ${s_bar}")
+    lines+=(" <span foreground='${FG}'>  󰔟  Session</span>")
+    lines+=("   ${s_bar}  <span font_weight='bold' foreground='${s_color}'>${session_pct}% ${session_pace}</span>")
     lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${s_cd}</span>")
     lines+=("")
-    lines+=(" <span foreground='${FG}'>  󰃰  Weekly</span>             <span font_weight='bold' foreground='${w_color}'>${weekly_pct}% ${weekly_pace}</span>")
-    lines+=("   ${w_bar}")
+    lines+=(" <span foreground='${FG}'>  󰃰  Weekly</span>")
+    lines+=("   ${w_bar}  <span font_weight='bold' foreground='${w_color}'>${weekly_pct}% ${weekly_pace}</span>")
     lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${w_cd}</span>")
 
     if [[ "$has_sonnet" == "true" ]]; then
@@ -546,8 +546,8 @@ else
         sn_bar=$(make_bar "$sonnet_pct" "$sn_color")
         sn_cd=$(countdown "$sonnet_reset")
         lines+=("")
-        lines+=(" <span foreground='${FG}'>  󱤔  Sonnet only</span>        <span font_weight='bold' foreground='${sn_color}'>${sonnet_pct}%</span>")
-        lines+=("   ${sn_bar}")
+        lines+=(" <span foreground='${FG}'>  󱤔  Sonnet only</span>")
+        lines+=("   ${sn_bar}  <span font_weight='bold' foreground='${sn_color}'>${sonnet_pct}%</span>")
         lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${sn_cd}</span>")
     fi
 
@@ -556,8 +556,8 @@ else
         ex_bar=$(make_bar "$extra_pct" "$ex_color")
         lines+=("")
         lines+=("SEP")
-        lines+=(" <span foreground='${FG}'>  󰄑  Extra usage</span>     <span font_weight='bold' foreground='${ex_color}'>${extra_spent}</span>")
-        lines+=("   ${ex_bar}")
+        lines+=(" <span foreground='${FG}'>  󰄑  Extra usage</span>")
+        lines+=("   ${ex_bar}  <span font_weight='bold' foreground='${ex_color}'>${extra_spent}</span>")
         lines+=(" <span foreground='${DIM}'>  󰀓  Limit: ${extra_limit}</span>")
         lines+=(" <span foreground='${DIM}'>  󰏗  Balance: ${extra_balance}</span>")
     fi
