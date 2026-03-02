@@ -321,58 +321,68 @@ mkdir -p "$CACHE_DIR"
 cache_file="$CACHE_DIR/usage.json"
 stale_marker="$CACHE_DIR/.stale"
 
-use_cache=false
-if [[ -f "$cache_file" ]]; then
-    cache_age=$(( $(date +%s) - $(date -r "$cache_file" +%s) ))
-    (( cache_age < CACHE_TTL )) && use_cache=true
-fi
+_lockfile="$CACHE_DIR/.fetch.lock"
 
-if [[ "$use_cache" == "true" ]]; then
-    usage=$(<"$cache_file")
-elif [[ "$auth_ok" == "false" ]]; then
-    # Auth failed — show loading if syncing in background, or fall back to stale cache
+_fetch_usage() {
+    use_cache=false
     if [[ -f "$cache_file" ]]; then
-        stale_age=$(( $(date +%s) - $(date -r "$cache_file" +%s) ))
-        if (( stale_age > SESSION_WINDOW )); then
-            rm -f "$cache_file" "$stale_marker"
+        cache_age=$(( $(date +%s) - $(date -r "$cache_file" +%s) ))
+        (( cache_age < CACHE_TTL )) && use_cache=true
+    fi
+
+    if [[ "$use_cache" == "true" ]]; then
+        usage=$(<"$cache_file")
+    elif [[ "$auth_ok" == "false" ]]; then
+        # Auth failed — show loading if syncing in background, or fall back to stale cache
+        if [[ -f "$cache_file" ]]; then
+            stale_age=$(( $(date +%s) - $(date -r "$cache_file" +%s) ))
+            if (( stale_age > SESSION_WINDOW )); then
+                rm -f "$cache_file" "$stale_marker"
+                if [[ "$syncing" == "true" ]]; then
+                    jq -nc '{text:"↻", tooltip:"Syncing with Claude...", class:"low"}'
+                    exit 0
+                fi
+                die "Session expired.\nRun <b>claude</b> to re-login."
+            fi
+            usage=$(<"$cache_file")
+            # Notify once per failure (avoid spamming) — skip if syncing
+            if [[ "$syncing" != "true" ]] && [[ ! -f "$stale_marker" ]]; then
+                touch "$stale_marker"
+                command -v notify-send &>/dev/null && \
+                    notify-send -u normal -i dialog-warning \
+                        "Claude Usage" "Session expired. Run <b>claude</b> to re-login." 2>/dev/null || true
+            fi
+        else
             if [[ "$syncing" == "true" ]]; then
                 jq -nc '{text:"↻", tooltip:"Syncing with Claude...", class:"low"}'
                 exit 0
             fi
             die "Session expired.\nRun <b>claude</b> to re-login."
         fi
-        usage=$(<"$cache_file")
-        # Notify once per failure (avoid spamming) — skip if syncing
-        if [[ "$syncing" != "true" ]] && [[ ! -f "$stale_marker" ]]; then
-            touch "$stale_marker"
-            command -v notify-send &>/dev/null && \
-                notify-send -u normal -i dialog-warning \
-                    "Claude Usage" "Session expired. Run <b>claude</b> to re-login." 2>/dev/null || true
-        fi
     else
-        if [[ "$syncing" == "true" ]]; then
-            jq -nc '{text:"↻", tooltip:"Syncing with Claude...", class:"low"}'
-            exit 0
-        fi
-        die "Session expired.\nRun <b>claude</b> to re-login."
-    fi
-else
-    usage=$(curl -sf --max-time 10 "$API_URL" \
-        -H "Authorization: Bearer $access_token" \
-        -H "anthropic-beta: oauth-2025-04-20") || true
+        usage=$(curl -sf --max-time 10 "$API_URL" \
+            -H "Authorization: Bearer $access_token" \
+            -H "anthropic-beta: oauth-2025-04-20") || true
 
-    if [[ -n "$usage" ]] && jq -e '.five_hour' <<< "$usage" &>/dev/null; then
-        _ctmp=$(mktemp "$CACHE_DIR/.usage.XXXXXX")
-        printf '%s' "$usage" > "$_ctmp" && mv "$_ctmp" "$cache_file"
-        rm -f "$stale_marker"
-    elif [[ -f "$cache_file" ]]; then
-        # API failed — fall back to stale cache
-        usage=$(<"$cache_file")
-        touch "$stale_marker"
-    else
-        die "API request failed.\nCheck your connection."
+        if [[ -n "$usage" ]] && jq -e '.five_hour' <<< "$usage" &>/dev/null; then
+            _ctmp=$(mktemp "$CACHE_DIR/.usage.XXXXXX")
+            printf '%s' "$usage" > "$_ctmp" && mv "$_ctmp" "$cache_file"
+            rm -f "$stale_marker"
+        elif [[ -f "$cache_file" ]]; then
+            # API failed — fall back to stale cache
+            usage=$(<"$cache_file")
+            touch "$stale_marker"
+        else
+            die "API request failed.\nCheck your connection."
+        fi
     fi
-fi
+}
+
+# Serialize concurrent instances (multi-monitor) so only one hits the API
+exec 9>"$_lockfile"
+flock -w 15 9
+_fetch_usage
+exec 9>&-
 
 # --- Parse windows ---
 parse_pct() {
@@ -561,6 +571,13 @@ else
         lines+=(" <span foreground='${DIM}'>  󰀓  Limit: ${extra_limit}</span>")
         lines+=(" <span foreground='${DIM}'>  󰏗  Balance: ${extra_balance}</span>")
     fi
+
+    # "Last updated" from cache file mtime (= last successful API fetch)
+    _updated="—"
+    [[ -f "$cache_file" ]] && _updated=$(date -r "$cache_file" +%H:%M)
+    lines+=("")
+    lines+=("SEP")
+    lines+=(" <span foreground='${DIM}'>  󰅐  Updated ${_updated}</span>")
 
     # Calculate max width from content
     max_w=0
