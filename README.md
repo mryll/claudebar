@@ -73,7 +73,7 @@ Add the module to your `~/.config/waybar/config.jsonc`:
 "custom/claudebar": {
     "exec": "claudebar",
     "return-type": "json",
-    "interval": 60,
+    "interval": 300,
     "signal": 13,
     "tooltip": true,
     "on-click": "xdg-open https://claude.ai/settings/usage"
@@ -174,7 +174,7 @@ Pass the format in your waybar config:
 "custom/claudebar": {
     "exec": "claudebar --format '{session_pct}% {session_pace}'",
     "return-type": "json",
-    "interval": 60,
+    "interval": 300,
     "signal": 13,
     "tooltip": true,
     "on-click": "xdg-open https://claude.ai/settings/usage"
@@ -240,7 +240,7 @@ In your waybar config:
 "custom/claudebar": {
     "exec": "claudebar --pace-tolerance 3",
     "return-type": "json",
-    "interval": 60,
+    "interval": 300,
     "signal": 13,
     "tooltip": true
 }
