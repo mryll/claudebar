@@ -597,8 +597,21 @@ else
             lines+=("")
             lines+=("SEP")
             _err_line=" <span foreground='${_err_color}'>  ${_err_icon}  HTTP ${_le_code}</span>"
-            [[ -n "$_le_msg" ]] && _err_line+="<span foreground='${DIM}'> — ${_le_msg}</span>"
             lines+=("$_err_line")
+            if [[ -n "$_le_msg" ]]; then
+                _wbuf=""
+                for _wword in $_le_msg; do
+                    if [[ -z "$_wbuf" ]]; then
+                        _wbuf="$_wword"
+                    elif (( ${#_wbuf} + 1 + ${#_wword} <= 35 )); then
+                        _wbuf+=" $_wword"
+                    else
+                        lines+=("     <span foreground='${DIM}'>${_wbuf}</span>")
+                        _wbuf="$_wword"
+                    fi
+                done
+                [[ -n "$_wbuf" ]] && lines+=("     <span foreground='${DIM}'>${_wbuf}</span>")
+            fi
         fi
     fi
 
