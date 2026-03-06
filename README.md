@@ -132,6 +132,17 @@ Available flags: `--color-low`, `--color-mid`, `--color-high`, `--color-critical
 
 CSS classes (`low`, `mid`, `high`, `critical`) are also emitted for additional styling via `~/.config/waybar/style.css`.
 
+### Spacing
+
+Adjust padding and margin in your `~/.config/waybar/style.css` to control spacing around the widget:
+
+```css
+#custom-claudebar {
+    padding: 0 8px;
+    margin: 0 4px;
+}
+```
+
 ## Format customization
 
 Use `--format` to control what the widget outputs as bar text:
