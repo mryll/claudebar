@@ -1,5 +1,8 @@
 # claudebar
 
+[![AUR version](https://img.shields.io/aur/version/claudebar)](https://aur.archlinux.org/packages/claudebar)
+[![License: MIT](https://img.shields.io/github/license/mryll/claudebar)](LICENSE)
+
 Waybar widget that shows your Claude AI usage limits -- session, weekly, and per-model -- with colored progress bars and countdown timers.
 
 ![screenshot](screenshot.png)
@@ -289,17 +292,6 @@ API responses are cached in `~/.cache/claudebar/usage.json` for 60 seconds. This
 | `󰚩` ⚠ | Token expired | Run `claude` to re-authenticate |
 | `󰚩` ⚠ | API error | Check your internet connection |
 | Nothing | Module not loaded | Check waybar config and restart waybar |
-
-## Color thresholds
-
-| Usage | Bar color | Waybar class |
-|---|---|---|
-| 0-49% | Green (`#98c379`) | `low` |
-| 50-74% | Yellow (`#e5c07b`) | `mid` |
-| 75-89% | Orange (`#d19a66`) | `high` |
-| 90-100% | Red (`#e06c75`) | `critical` |
-
-To override these defaults, use `--color-*` flags (see [Colors](#colors)).
 
 ## License
 
