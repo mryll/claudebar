@@ -134,7 +134,7 @@ CSS classes (`low`, `mid`, `high`, `critical`) are also emitted for additional s
 
 ### Theming (Omarchy Users)
 
-Tooltip and bar text colors are automatically read from the active [Omarchy](https://github.com/pablopunk/omarchy) theme at `~/.config/omarchy/current/theme/colors.toml` on every execution. On non-Omarchy systems, the One Dark palette is used as fallback.
+Tooltip and bar text colors are automatically read from the active [Omarchy](https://github.com/basecamp/omarchy) theme at `~/.config/omarchy/current/theme/colors.toml` on every execution. On non-Omarchy systems, the One Dark palette is used as fallback.
 
 The priority chain is: **CLI flags** (`--color-*`) > **Omarchy theme** > **One Dark defaults**.
 
