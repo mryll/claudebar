@@ -132,16 +132,24 @@ Available flags: `--color-low`, `--color-mid`, `--color-high`, `--color-critical
 
 CSS classes (`low`, `mid`, `high`, `critical`) are also emitted for additional styling via `~/.config/waybar/style.css`.
 
+### Theming (Omarchy Users)
+
+Tooltip and bar text colors are automatically read from the active [Omarchy](https://github.com/pablopunk/omarchy) theme at `~/.config/omarchy/current/theme/colors.toml` on every execution. On non-Omarchy systems, the One Dark palette is used as fallback.
+
+The priority chain is: **CLI flags** (`--color-*`) > **Omarchy theme** > **One Dark defaults**.
+
 ### Spacing
 
-Adjust padding and margin in your `~/.config/waybar/style.css` to control spacing around the widget:
+Adjust `padding` (space **inside** the widget, between border and content) and `margin` (space **outside** the widget, between the widget and its neighbors) in your `~/.config/waybar/style.css`:
 
 ```css
 #custom-claudebar {
-    padding: 0 8px;
-    margin: 0 4px;
+    padding: 0 8px;   /* top/bottom: 0, left/right: 8px */
+    margin: 0 4px;    /* top/bottom: 0, left/right: 4px */
 }
 ```
+
+Waybar uses standard CSS shorthand order — `top right bottom left` (clockwise). With 2 values: first = top/bottom, second = left/right.
 
 ## Format customization
 
