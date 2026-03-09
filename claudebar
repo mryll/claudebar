@@ -380,9 +380,11 @@ _fetch_usage() {
             # API failed — fall back to stale cache
             usage=$(<"$cache_file")
             touch "$stale_marker"
-            # Persist error details for tooltip
-            _err_msg=$(jq -r '.error.message // empty' <<< "$_resp_body" 2>/dev/null) || true
-            printf '%s\n%s' "$_http_code" "$_err_msg" > "$CACHE_DIR/.last_error"
+            # Only persist real HTTP error codes (4xx/5xx) for tooltip
+            if [[ "$_http_code" =~ ^[45][0-9]{2}$ ]]; then
+                _err_msg=$(jq -r '.error.message // empty' <<< "$_resp_body" 2>/dev/null) || true
+                printf '%s\n%s' "$_http_code" "$_err_msg" > "$CACHE_DIR/.last_error"
+            fi
         else
             die "API request failed.\nCheck your connection."
         fi
