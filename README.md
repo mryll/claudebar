@@ -83,6 +83,11 @@ Add the module to your `~/.config/waybar/config.jsonc`:
 }
 ```
 
+> **⚠️ Rate limiting:** The usage endpoint (`/api/oauth/usage`) is undocumented and has aggressive rate limits.
+> Intervals below 300s will likely trigger HTTP 429 errors. Even at 300s, 429s may occur during
+> Anthropic service disruptions. When this happens, the widget falls back to cached data and shows
+> a `⏸` indicator. See [claude-code#30930](https://github.com/anthropics/claude-code/issues/30930).
+
 ### Adding an icon
 
 Use `--icon` to prepend an icon to the widget text. The icon inherits the same color as the usage text.
@@ -290,6 +295,7 @@ API responses are cached in `~/.cache/claudebar/usage.json` for 60 seconds. This
 | `󰚩` ↻ | Syncing | Normal at boot -- data appears on next refresh |
 | `󰚩` ⚠ | Auth error | Run `claude` to log in |
 | `󰚩` ⚠ | Token expired | Run `claude` to re-authenticate |
+| `󰚩` ⏸ | Stale data (API rate-limited) | Cached data is shown; resolves automatically. See note above |
 | `󰚩` ⚠ | API error | Check your internet connection |
 | Nothing | Module not loaded | Check waybar config and restart waybar |
 
