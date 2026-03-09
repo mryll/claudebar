@@ -260,8 +260,8 @@ syncing=false
 # Helper: refresh token, fetch usage, write cache (used by background sync)
 _do_refresh_and_fetch() {
     local _resp _at _nr _ei _nea _tmp _usage
-    for (( _try=1; _try<=3; _try++ )); do
-        sleep 2
+    for (( _try=1; _try<=12; _try++ )); do
+        sleep $(( _try < 4 ? 5 : 10 ))
         _resp=$(curl -sf --max-time 5 -X POST "$TOKEN_URL" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "grant_type=refresh_token&client_id=${CLIENT_ID}&refresh_token=${refresh_token}") || true
@@ -341,7 +341,7 @@ _fetch_usage() {
             if (( stale_age > SESSION_WINDOW )); then
                 rm -f "$cache_file" "$stale_marker" "$CACHE_DIR/.last_error"
                 if [[ "$syncing" == "true" ]]; then
-                    jq -nc '{text:"↻", tooltip:"Syncing with Claude...", class:"low"}'
+                    jq -nc --arg t "${BAR_ICON:+${BAR_ICON} }↻" '{text:$t, tooltip:"Syncing with Claude...", class:"low"}'
                     exit 0
                 fi
                 die "Session expired.\nRun <b>claude</b> to re-login."
@@ -357,7 +357,7 @@ _fetch_usage() {
             fi
         else
             if [[ "$syncing" == "true" ]]; then
-                jq -nc '{text:"↻", tooltip:"Syncing with Claude...", class:"low"}'
+                jq -nc --arg t "${BAR_ICON:+${BAR_ICON} }↻" '{text:$t, tooltip:"Syncing with Claude...", class:"low"}'
                 exit 0
             fi
             die "Session expired.\nRun <b>claude</b> to re-login."
