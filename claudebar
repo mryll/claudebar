@@ -261,7 +261,7 @@ syncing=false
 _do_refresh_and_fetch() {
     local _resp _at _nr _ei _nea _tmp _usage
     for (( _try=1; _try<=12; _try++ )); do
-        sleep $(( _try < 4 ? 5 : 10 ))
+        (( _try > 1 )) && sleep $(( _try < 4 ? 5 : 10 ))
         _resp=$(curl -sf --max-time 5 -X POST "$TOKEN_URL" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "grant_type=refresh_token&client_id=${CLIENT_ID}&refresh_token=${refresh_token}") || true
@@ -291,9 +291,16 @@ _do_refresh_and_fetch() {
     return 1
 }
 
+# Use longer timeout on cold start (boot) — network may still be coming up
+_refresh_timeout=3
+if [[ ! -f "$CACHE_DIR/usage.json" ]] || \
+   (( $(date +%s) - $(date -r "$CACHE_DIR/usage.json" +%s 2>/dev/null || echo 0) > CACHE_TTL )); then
+    _refresh_timeout=10
+fi
+
 if (( expires_s < now_s + REFRESH_BUFFER )); then
-    # Quick attempt (3s timeout) — works mid-session when network is up
-    resp=$(curl -sf --max-time 3 -X POST "$TOKEN_URL" \
+    # Quick attempt — 10s on cold start (boot), 3s mid-session
+    resp=$(curl -sf --max-time "$_refresh_timeout" -X POST "$TOKEN_URL" \
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=refresh_token&client_id=${CLIENT_ID}&refresh_token=${refresh_token}") || true
 
