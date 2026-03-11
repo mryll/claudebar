@@ -146,6 +146,10 @@ Tooltip and bar text colors are automatically read from the active [Omarchy](htt
 
 The priority chain is: **CLI flags** (`--color-*`) > **Omarchy theme** > **One Dark defaults**.
 
+| Tokyo Night | Gruvbox | Catppuccin Latte |
+|:---:|:---:|:---:|
+| ![Tokyo Night](screenshots/tokyo-night.png) | ![Gruvbox](screenshots/gruvbox.png) | ![Catppuccin Latte](screenshots/catppuccin-latte.png) |
+
 ### Spacing
 
 Adjust `padding` (space **inside** the widget, between border and content) and `margin` (space **outside** the widget, between the widget and its neighbors) in your `~/.config/waybar/style.css`:

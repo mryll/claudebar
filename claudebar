@@ -23,7 +23,6 @@
 #   {sonnet_reset}      Sonnet countdown
 #   {extra_spent}       Extra usage spent (e.g. "$2.50")
 #   {extra_limit}       Extra usage monthly limit (e.g. "$50.00")
-#   {extra_balance}     Extra usage balance (e.g. "$47.50")
 #   {extra_pct}         Extra usage spent %
 #
 # Default format: "{session_pct}% · {session_reset}"
@@ -433,7 +432,6 @@ has_extra=$(jq '.extra_usage != null' <<< "$usage")
 extra_enabled="false"
 extra_spent=""
 extra_limit=""
-extra_balance=""
 extra_pct=0
 if [[ "$has_extra" == "true" ]]; then
     extra_enabled=$(jq -r '.extra_usage.is_enabled // false' <<< "$usage")
@@ -450,8 +448,6 @@ if [[ "$has_extra" == "true" ]]; then
         }
         extra_limit=$(_fmt_dollars "$local_limit")
         extra_spent=$(_fmt_dollars "$local_used")
-        local_balance=$(( local_limit - local_used ))
-        extra_balance=$(_fmt_dollars "$local_balance")
         if (( local_limit > 0 )); then
             extra_pct=$(( local_used * 100 / local_limit ))
         fi
@@ -508,7 +504,6 @@ apply_format() {
     text="${text//\{sonnet_reset\}/$sn_cd_val}"
     text="${text//\{extra_spent\}/$extra_spent}"
     text="${text//\{extra_limit\}/$extra_limit}"
-    text="${text//\{extra_balance\}/$extra_balance}"
     text="${text//\{extra_pct\}/$extra_pct}"
     printf '%s' "$text"
 }
@@ -589,7 +584,6 @@ else
         lines+=(" <span foreground='${FG}'>  󰄑  Extra usage</span>")
         lines+=("   ${ex_bar}  <span font_weight='bold' foreground='${ex_color}'>${extra_spent}</span>")
         lines+=(" <span foreground='${DIM}'>  󰀓  Limit: ${extra_limit}</span>")
-        lines+=(" <span foreground='${DIM}'>  󰏗  Balance: ${extra_balance}</span>")
     fi
 
     # API error info (if stale)
