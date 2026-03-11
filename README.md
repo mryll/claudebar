@@ -3,7 +3,7 @@
 [![AUR version](https://img.shields.io/aur/version/claudebar)](https://aur.archlinux.org/packages/claudebar)
 [![License: MIT](https://img.shields.io/github/license/mryll/claudebar)](LICENSE)
 
-Waybar widget that shows your Claude AI usage limits -- session, weekly, and per-model -- with colored progress bars and countdown timers.
+Waybar widget that shows your Claude AI usage limits — session, weekly, and per-model — with colored progress bars and countdown timers.
 
 ![screenshot](screenshot.png)
 
@@ -12,18 +12,18 @@ Waybar widget that shows your Claude AI usage limits -- session, weekly, and per
 - Session (5h) and weekly (7d) usage with countdown timers
 - Per-model tracking (Sonnet) when available
 - Extra usage tracking (spending, limit, balance) when enabled
-- Pacing indicators -- are you using too fast or too slow?
+- Pacing indicators — are you using too fast or too slow?
 - Colored progress bars in tooltip (Pango markup)
 - Customizable bar text and tooltip via `--format` / `--tooltip-format` placeholders
 - Granular CSS classes (`low`, `mid`, `high`, `critical`) for bar styling
-- Response cache (60s TTL) -- fast even on multi-monitor setups
+- Response cache (60s TTL) — fast even on multi-monitor setups
 - Auto-refreshes OAuth token (no manual re-auth needed)
-- Pure bash -- no runtime dependencies beyond `curl`, `jq`, and GNU `date`
+- Pure Bash — no runtime dependencies beyond `curl`, `jq`, and GNU `date`
 - Works with any Waybar setup (Hyprland, Sway, etc.)
 
 ## Requirements
 
-- [Claude CLI](https://github.com/anthropics/claude-code) -- must be logged in (`claude` command)
+- [Claude CLI](https://github.com/anthropics/claude-code) — must be logged in (`claude` command)
 - Claude Pro or Max subscription
 - `curl`, `jq`, GNU `date` (standard on most Linux systems)
 - [Waybar](https://github.com/Alexays/Waybar)
@@ -65,14 +65,13 @@ curl -fsSL https://raw.githubusercontent.com/mryll/claudebar/main/claudebar \
   -o ~/.local/bin/claudebar && chmod +x ~/.local/bin/claudebar
 ```
 
-## Waybar configuration
+## Quick start
 
 Add the module to your `~/.config/waybar/config.jsonc`:
 
 ```jsonc
 "modules-right": ["custom/claudebar", ...],
 
-// Without icon (default)
 "custom/claudebar": {
     "exec": "claudebar",
     "return-type": "json",
@@ -83,12 +82,12 @@ Add the module to your `~/.config/waybar/config.jsonc`:
 }
 ```
 
-> **⚠️ Rate limiting:** The usage endpoint (`/api/oauth/usage`) is undocumented and has aggressive rate limits.
-> Intervals below 300s will likely trigger HTTP 429 errors. Even at 300s, 429s may occur during
-> Anthropic service disruptions. When this happens, the widget falls back to cached data and shows
-> a `⏸` indicator. See [claude-code#30930](https://github.com/anthropics/claude-code/issues/30930).
+> [!WARNING]
+> The usage endpoint (`/api/oauth/usage`) is undocumented and has aggressive rate limits. Intervals below 300s will likely trigger HTTP 429 errors. Even at 300s, 429s may occur during Anthropic service disruptions. When this happens, the widget falls back to cached data and shows a `⏸` indicator. See [claude-code#30930](https://github.com/anthropics/claude-code/issues/30930).
 
-### Adding an icon
+## Configuration
+
+### Icon
 
 Use `--icon` to prepend an icon to the widget text. The icon inherits the same color as the usage text.
 
@@ -112,9 +111,8 @@ Use `--icon` to prepend an icon to the widget text. The icon inherits the same c
 "exec": "claudebar --icon \"<span font='Font Awesome 7 Brands'>&#xe861;</span>\""
 ```
 
-> **Note:** On Arch Linux, install the OTF package (`sudo pacman -S otf-font-awesome`).
-> The WOFF2 variant (`woff2-font-awesome`) does not render in Waybar due to a
-> [Pango compatibility issue](https://github.com/Alexays/Waybar/issues/4381).
+> [!NOTE]
+> On Arch Linux, install the OTF package (`sudo pacman -S otf-font-awesome`). The WOFF2 variant (`woff2-font-awesome`) does not render in Waybar due to a [Pango compatibility issue](https://github.com/Alexays/Waybar/issues/4381).
 
 ### Colors
 
@@ -122,10 +120,10 @@ The bar text is colored by severity level out of the box (One Dark palette):
 
 | Class | Range | Default color |
 |---|---|---|
-| `low` | 0-49% | `#98c379` (green) |
-| `mid` | 50-74% | `#e5c07b` (yellow) |
-| `high` | 75-89% | `#d19a66` (orange) |
-| `critical` | 90-100% | `#e06c75` (red) |
+| `low` | 0–49% | `#98c379` (green) |
+| `mid` | 50–74% | `#e5c07b` (yellow) |
+| `high` | 75–89% | `#d19a66` (orange) |
+| `critical` | 90–100% | `#e06c75` (red) |
 
 To override, pass `--color-*` flags in the `exec` field:
 
@@ -140,7 +138,7 @@ Available flags: `--color-low`, `--color-mid`, `--color-high`, `--color-critical
 
 CSS classes (`low`, `mid`, `high`, `critical`) are also emitted for additional styling via `~/.config/waybar/style.css`.
 
-### Theming (Omarchy Users)
+### Theming (Omarchy)
 
 Tooltip and bar text colors are automatically read from the active [Omarchy](https://github.com/basecamp/omarchy) theme at `~/.config/omarchy/current/theme/colors.toml` on every execution. On non-Omarchy systems, the One Dark palette is used as fallback.
 
@@ -150,22 +148,9 @@ The priority chain is: **CLI flags** (`--color-*`) > **Omarchy theme** > **One D
 |:---:|:---:|:---:|
 | ![Tokyo Night](screenshots/tokyo-night.png) | ![Gruvbox](screenshots/gruvbox.png) | ![Catppuccin Latte](screenshots/catppuccin-latte.png) |
 
-### Spacing
+### Format customization
 
-Adjust `padding` (space **inside** the widget, between border and content) and `margin` (space **outside** the widget, between the widget and its neighbors) in your `~/.config/waybar/style.css`:
-
-```css
-#custom-claudebar {
-    padding: 0 8px;   /* top/bottom: 0, left/right: 8px */
-    margin: 0 4px;    /* top/bottom: 0, left/right: 4px */
-}
-```
-
-Waybar uses standard CSS shorthand order — `top right bottom left` (clockwise). With 2 values: first = top/bottom, second = left/right.
-
-## Format customization
-
-Use `--format` to control what the widget outputs as bar text:
+Use `--format` to control the bar text:
 
 ```bash
 # Default (session usage + countdown)
@@ -189,9 +174,8 @@ claudebar --format '{session_pct}%'
 # => 42%
 ```
 
-> **Tip:** For icons, use waybar's `format` field (see [Adding an icon](#adding-an-icon))
-> instead of embedding them in `--format`. This lets you use Pango markup to select
-> the font, which is necessary for brand icons like Font Awesome.
+> [!TIP]
+> For icons, use `--icon` (see [Icon](#icon)) instead of embedding them in `--format`. This lets you use Pango markup to select the font, which is necessary for brand icons like Font Awesome.
 
 Use `--tooltip-format` for a custom plain-text tooltip (overrides the default rich tooltip):
 
@@ -199,7 +183,7 @@ Use `--tooltip-format` for a custom plain-text tooltip (overrides the default ri
 claudebar --tooltip-format 'Session: {session_pct}% ({session_reset}) | Weekly: {weekly_pct}% ({weekly_reset})'
 ```
 
-Pass the format in your waybar config:
+Example Waybar config with custom format:
 
 ```jsonc
 "custom/claudebar": {
@@ -212,7 +196,7 @@ Pass the format in your waybar config:
 }
 ```
 
-### Available placeholders
+#### Available placeholders
 
 | Placeholder | Description | Example |
 |---|---|---|
@@ -239,9 +223,9 @@ Pass the format in your waybar config:
 
 Pacing compares your actual usage against where you "should" be if you spread your quota evenly across the window. It answers: "at this rate, will I run out before the window resets?"
 
-- **↑** -- ahead of pace (using faster than sustainable)
-- **→** -- on track
-- **↓** -- under pace (plenty of room left)
+- **↑** — ahead of pace (using faster than sustainable)
+- **→** — on track
+- **↓** — under pace (plenty of room left)
 
 **How it works:** if 30% of the session time has elapsed, you "should" have used ~30% of your quota. The widget divides your actual usage by the expected usage and flags deviations beyond a tolerance band:
 
@@ -252,32 +236,28 @@ Pacing compares your actual usage against where you "should" be if you spread yo
 | Perfectly even | 50% | 50% | on track | → |
 | Conserving | 70% | 30% | 57% under | ↓ |
 
-By default the tolerance is **±5%** -- deviations of 5% or less show as "on track" to avoid noise. `--pace-tolerance` accepts a non-negative integer (e.g. 0–50). You can tune it like this:
+By default the tolerance is **±5%** — deviations of 5% or less show as "on track" to avoid noise. You can tune it with `--pace-tolerance`:
 
 ```bash
-# More sensitive (±2%) -- flags smaller deviations
+# More sensitive (±2%) — flags smaller deviations
 claudebar --pace-tolerance 2
 
-# More relaxed (±10%) -- only flags large deviations
+# More relaxed (±10%) — only flags large deviations
 claudebar --pace-tolerance 10
-
-# Default (±5%)
-claudebar
-```
-
-In your waybar config:
-
-```jsonc
-"custom/claudebar": {
-    "exec": "claudebar --pace-tolerance 3",
-    "return-type": "json",
-    "interval": 300,
-    "signal": 13,
-    "tooltip": true
-}
 ```
 
 The `{session_pace_pct}` / `{weekly_pace_pct}` placeholders show the deviation (e.g. "12% ahead", "5% under", "on track").
+
+### Spacing
+
+Adjust `padding` (inside the widget) and `margin` (outside the widget) in `~/.config/waybar/style.css`:
+
+```css
+#custom-claudebar {
+    padding: 0 8px;
+    margin: 0 4px;
+}
+```
 
 ## How it works
 
@@ -286,7 +266,7 @@ The `{session_pace_pct}` / `{weekly_pace_pct}` placeholders show the deviation (
 3. Calls `api.anthropic.com/api/oauth/usage` for live usage data (cached for 60s)
 4. Outputs JSON with `text`, `tooltip` (Pango markup), and `class` for Waybar
 
-The tooltip shows colored progress bars for each usage window (session, weekly, sonnet) with countdown timers, time elapsed, and pacing info. Colors change from green to yellow to orange to red as usage increases.
+The tooltip shows colored progress bars for each usage window (session, weekly, sonnet) with countdown timers, time elapsed, and pacing info. Colors change from green → yellow → orange → red as usage increases.
 
 ### Cache
 
@@ -296,22 +276,18 @@ API responses are cached in `~/.cache/claudebar/usage.json` for 60 seconds. This
 
 | Bar shows | Meaning | Fix |
 |---|---|---|
-| `󰚩` ↻ | Syncing | Normal at boot -- data appears on next refresh |
+| `󰚩` ↻ | Syncing | Normal at boot — data appears on next refresh |
 | `󰚩` ⚠ | Auth error | Run `claude` to log in |
 | `󰚩` ⚠ | Token expired | Run `claude` to re-authenticate |
-| `󰚩` ⏸ | Stale data (API rate-limited) | Cached data is shown; resolves automatically. See note above |
+| `󰚩` ⏸ | Stale data (API rate-limited) | Cached data is shown; resolves automatically |
 | `󰚩` ⚠ | API error | Check your internet connection |
-| Nothing | Module not loaded | Check waybar config and restart waybar |
-
-## License
-
-[MIT](LICENSE)
+| Nothing | Module not loaded | Check Waybar config and restart Waybar |
 
 ## Related
 
-- [codexbar](https://github.com/mryll/codexbar) -- OpenAI Codex usage widget for Waybar
-- [logibar](https://github.com/mryll/logibar) -- Logitech battery widgets for Waybar
-- [meteobar](https://github.com/mryll/meteobar) -- Weather widget for Waybar (Open-Meteo)
-- [ClaudeBar](https://github.com/andresreibel/ClaudeBar) -- Similar widget using TypeScript/Bun
-- [waybar-ai-usage](https://github.com/NihilDigit/waybar-ai-usage) -- Claude + Codex monitor (Python, uses browser cookies)
-- [Waybar](https://github.com/Alexays/Waybar) -- Status bar for Wayland compositors
+- [codexbar](https://github.com/mryll/codexbar) — OpenAI Codex usage widget for Waybar
+- [logibar](https://github.com/mryll/logibar) — Logitech battery widgets for Waybar
+- [meteobar](https://github.com/mryll/meteobar) — Weather widget for Waybar (Open-Meteo)
+- [ClaudeBar](https://github.com/andresreibel/ClaudeBar) — Similar widget using TypeScript/Bun
+- [waybar-ai-usage](https://github.com/NihilDigit/waybar-ai-usage) — Claude + Codex monitor (Python, uses browser cookies)
+- [Waybar](https://github.com/Alexays/Waybar) — Status bar for Wayland compositors
