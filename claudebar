@@ -4,6 +4,7 @@
 # with colored progress bars and Pango markup tooltip.
 #
 # Usage: claudebar [--icon ICON] [--format FORMAT] [--tooltip-format FORMAT] [--pace-tolerance N]
+#                  [--format-pace-color] [--tooltip-pace-pts]
 #                  [--color-low HEX] [--color-mid HEX] [--color-high HEX] [--color-critical HEX]
 #
 # Format placeholders:
@@ -12,15 +13,30 @@
 #   {session_pct}       Session (5h) usage %
 #   {session_reset}     Session countdown (e.g. "1h 30m")
 #   {session_elapsed}   Session time elapsed % (e.g. "58")
-#   {session_pace}      Session pacing icon (↑ ahead, ↓ under, → on track)
-#   {session_pace_pct}  Session pacing deviation (e.g. "12% ahead")
+#   {session_pace}           Session pacing icon, ratio-based (↑ ↓ →)
+#   {session_pace_indicator} Session pacing icon, point-based (↑ ↓ →)
+#   {session_pace_pct}       Session pacing deviation, ratio (e.g. "72% ahead")
+#   {session_pace_pts}       Session pacing deviation, points (e.g. "12pts ahead")
+#   {session_pace_delta}     Session pacing delta, signed (e.g. "-12", "5", "0")
+#   {session_pace_abs_delta} Session pacing delta, unsigned (e.g. "12", "5", "0")
 #   {weekly_pct}        Weekly (7d all models) usage %
 #   {weekly_reset}      Weekly countdown (e.g. "4d 1h")
 #   {weekly_elapsed}    Weekly time elapsed % (e.g. "42")
-#   {weekly_pace}       Weekly pacing icon
-#   {weekly_pace_pct}   Weekly pacing deviation
+#   {weekly_pace}            Weekly pacing icon, ratio-based (↑ ↓ →)
+#   {weekly_pace_indicator}  Weekly pacing icon, point-based (↑ ↓ →)
+#   {weekly_pace_pct}        Weekly pacing deviation, ratio (e.g. "72% ahead")
+#   {weekly_pace_pts}        Weekly pacing deviation, points (e.g. "12pts ahead")
+#   {weekly_pace_delta}      Weekly pacing delta, signed (e.g. "-12", "5", "0")
+#   {weekly_pace_abs_delta}  Weekly pacing delta, unsigned (e.g. "12", "5", "0")
 #   {sonnet_pct}        Sonnet-only weekly usage %
 #   {sonnet_reset}      Sonnet countdown
+#   {sonnet_elapsed}    Sonnet time elapsed % (e.g. "42")
+#   {sonnet_pace}            Sonnet pacing icon, ratio-based (↑ ↓ →)
+#   {sonnet_pace_indicator}  Sonnet pacing icon, point-based (↑ ↓ →)
+#   {sonnet_pace_pct}        Sonnet pacing deviation, ratio (e.g. "72% ahead")
+#   {sonnet_pace_pts}        Sonnet pacing deviation, points (e.g. "8pts ahead")
+#   {sonnet_pace_delta}      Sonnet pacing delta, signed (e.g. "-8", "3", "0")
+#   {sonnet_pace_abs_delta}  Sonnet pacing delta, unsigned (e.g. "8", "3", "0")
 #   {extra_spent}       Extra usage spent (e.g. "$2.50")
 #   {extra_limit}       Extra usage monthly limit (e.g. "$50.00")
 #   {extra_pct}         Extra usage spent %
@@ -38,6 +54,8 @@ BAR_COLOR_MID=""
 BAR_COLOR_HIGH=""
 BAR_COLOR_CRITICAL=""
 BAR_ICON=""
+FORMAT_PACE_COLOR=false
+TOOLTIP_PACE_PTS=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --icon)
@@ -52,6 +70,8 @@ while [[ $# -gt 0 ]]; do
         --pace-tolerance)
             [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--pace-tolerance requires a value","class":"critical"}'; exit 0; }
             PACE_TOLERANCE="$2"; shift 2 ;;
+        --format-pace-color) FORMAT_PACE_COLOR=true; shift ;;
+        --tooltip-pace-pts) TOOLTIP_PACE_PTS=true; shift ;;
         --color-low)       [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--color-low requires a value","class":"critical"}'; exit 0; }
                            BAR_COLOR_LOW="$2"; shift 2 ;;
         --color-mid)       [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--color-mid requires a value","class":"critical"}'; exit 0; }
@@ -86,7 +106,7 @@ hex_blend() {
 load_theme_colors() {
     local theme_file="$HOME/.config/omarchy/current/theme/colors.toml"
     if [[ -f "$theme_file" ]]; then
-        local accent="" foreground="" background="" color1="" color2="" color3=""
+        local accent="" cursor="" foreground="" background="" color1="" color2="" color3=""
         while IFS= read -r line; do
             # Skip comments and empty lines
             [[ "$line" =~ ^[[:space:]]*# ]] && continue
@@ -96,6 +116,7 @@ load_theme_colors() {
                 local key="${BASH_REMATCH[1]}" val="${BASH_REMATCH[2]}"
                 case "$key" in
                     accent)     accent="$val" ;;
+                    cursor)     cursor="$val" ;;
                     foreground) foreground="$val" ;;
                     background) background="$val" ;;
                     color1)     color1="$val" ;;
@@ -110,6 +131,7 @@ load_theme_colors() {
         [[ -n "$color1" ]]     && { RED="$color1"; ORANGE="$color1"; }
         [[ -n "$color2" ]]     && GREEN="$color2"
         [[ -n "$color3" ]]     && YELLOW="$color3"
+        [[ -n "$cursor" ]]     && MARKER="$cursor"
         # DIM = midpoint between foreground and background
         if [[ -n "$foreground" && -n "$background" ]]; then
             DIM=$(hex_blend "$foreground" "$background")
@@ -130,6 +152,7 @@ BLUE="#61afef"
 DIM="#5c6370"
 FG="#abb2bf"
 BAR_EMPTY="#3e4451"
+MARKER="#d19a66"
 load_theme_colors
 
 # Bar text colors: CLI overrides > theme > One Dark defaults
@@ -165,15 +188,49 @@ color_for() {
     fi
 }
 
+# Color based on signed pacing delta, centered around zero:
+#   <= -10  green   (well under pace, plenty of room)
+#   -10..0  yellow  (slightly under, approaching even)
+#   0..+10  orange  (slightly ahead, watch it)
+#   >= +10  red     (burning fast)
+pace_color_for() {
+    local delta=${1:-0}
+    if   (( delta >= 10 ));  then printf '%s' "$RED"
+    elif (( delta >= 0 ));   then printf '%s' "$ORANGE"
+    elif (( delta >= -10 )); then printf '%s' "$YELLOW"
+    else printf '%s' "$GREEN"
+    fi
+}
+
+# Build a progress bar with optional elapsed marker.
+# Usage: make_bar <pct> <color> [marker_pct] [marker_color]
+# When marker is provided, a █ in marker_color is placed at the elapsed
+# position, showing where you'd be if pacing evenly across the window.
 make_bar() {
-    local p=$1 color=$2
+    local p=$1 color=$2 marker_pos=${3:--1} marker_color=${4:-}
     local filled=$(( p * BAR_LEN / 100 ))
     (( filled > BAR_LEN )) && filled=$BAR_LEN
-    local empty=$(( BAR_LEN - filled ))
+
     local f="" e=""
-    printf -v f '%*s' "$filled" ''; f="${f// /█}"
-    printf -v e '%*s' "$empty"  ''; e="${e// /░}"
-    printf "%s" "<span foreground='${color}'>${f}</span><span foreground='${BAR_EMPTY}'>${e}</span>"
+    if (( marker_pos < 0 )); then
+        printf -v f '%*s' "$filled" ''; printf -v e '%*s' "$(( BAR_LEN - filled ))" ''
+        printf "<span foreground='%s'>%s</span><span foreground='%s'>%s</span>" \
+            "$color" "${f// /█}" "$BAR_EMPTY" "${e// /░}"
+        return
+    fi
+
+    local m=$(( marker_pos * BAR_LEN / 100 ))
+    (( m > BAR_LEN - 1 )) && m=$(( BAR_LEN - 1 ))
+    local pre_f=$(( filled < m ? filled : m ))
+    local post_f=$(( filled > m + 1 ? filled - m - 1 : 0 ))
+
+    printf -v f '%*s' "$pre_f" ''; printf -v e '%*s' "$(( m - pre_f ))" ''
+    printf "<span foreground='%s'>%s</span><span foreground='%s'>%s</span>" \
+        "$color" "${f// /█}" "$BAR_EMPTY" "${e// /░}"
+    printf "<span foreground='%s'>█</span>" "$marker_color"
+    printf -v f '%*s' "$post_f" ''; printf -v e '%*s' "$(( BAR_LEN - m - 1 - post_f ))" ''
+    printf "<span foreground='%s'>%s</span><span foreground='%s'>%s</span>" \
+        "$color" "${f// /█}" "$BAR_EMPTY" "${e// /░}"
 }
 
 countdown() {
@@ -194,41 +251,57 @@ countdown() {
     fi
 }
 
-# Calculate time elapsed % and pacing for a usage window
+# Calculate time elapsed % and pacing for a usage window.
+# Uses point-based delta (actual - expected) for the icon and delta values.
+# If you've used 22% and 78% of time elapsed, delta = -56 — intuitive,
+# bounded, and stable across the window. Also computes the original
+# ratio-based label for backward-compatible {*_pace_pct} placeholders.
+#
 # Args: usage_pct resets_at window_duration_seconds
-# Outputs: elapsed_pct pace_icon pace_label
+# Output fields (space-separated, single-token fields first):
+#   elapsed_pct pace_icon pace_indicator pace_delta pace_pct_label pace_pts_label
 calc_pacing() {
     local usage_pct=$1 resets_at=$2 window_s=$3
-    local elapsed_pct=0 pace_icon="" pace_label=""
+    local elapsed_pct=0 pace_icon="→" pace_indicator="→" pace_delta="0"
+    local pace_pct_label="on track" pace_pts_label="on track"
 
     if [[ -n "$resets_at" && "$resets_at" != "0" && "$resets_at" != "null" ]] && (( window_s > 0 )); then
-        local reset_epoch now_epoch ms_left
-        reset_epoch=$(date -d "$resets_at" +%s 2>/dev/null) || { echo "0  "; return; }
-        now_epoch=$(date +%s)
-        ms_left=$(( reset_epoch - now_epoch ))
-        elapsed_pct=$(( (window_s - ms_left) * 100 / window_s ))
+        local reset_epoch remaining
+        reset_epoch=$(date -d "$resets_at" +%s 2>/dev/null) || { echo "0 → → 0 on track on track"; return; }
+        remaining=$(( reset_epoch - $(date +%s) ))
+        elapsed_pct=$(( (window_s - remaining) * 100 / window_s ))
         (( elapsed_pct < 0 )) && elapsed_pct=0
         (( elapsed_pct > 100 )) && elapsed_pct=100
 
-        pace_icon="→"
-        pace_label="on track"
+        # Point-based delta for indicator, delta, and pts label
+        local delta=$(( usage_pct - elapsed_pct ))
+        pace_delta="$delta"
+        if (( delta > 0 )); then
+            pace_indicator="↑"
+            pace_pts_label="${delta}pts ahead"
+        elif (( delta < 0 )); then
+            pace_indicator="↓"
+            pace_pts_label="$(( -delta ))pts under"
+        fi
+
+        # Ratio-based icon and label for backward-compatible {*_pace} and {*_pace_pct}
         if (( elapsed_pct > 0 )); then
             local pacing_x100=$(( usage_pct * 100 / elapsed_pct ))
             if (( pacing_x100 > 100 + PACE_TOLERANCE )); then
                 local dev=$(( pacing_x100 - 100 ))
                 (( dev > 999 )) && dev=999
                 pace_icon="↑"
-                pace_label="${dev}% ahead"
+                pace_pct_label="${dev}% ahead"
             elif (( pacing_x100 < 100 - PACE_TOLERANCE )); then
                 local dev=$(( 100 - pacing_x100 ))
                 (( dev > 999 )) && dev=999
                 pace_icon="↓"
-                pace_label="${dev}% under"
+                pace_pct_label="${dev}% under"
             fi
         fi
     fi
 
-    echo "${elapsed_pct} ${pace_icon} ${pace_label}"
+    echo "${elapsed_pct} ${pace_icon} ${pace_indicator} ${pace_delta} ${pace_pct_label} ${pace_pts_label}"
 }
 
 # --- Pre-checks ---
@@ -461,13 +534,60 @@ elif [[ "$rate_tier" == *"20x"* ]]; then plan+=" 20x"
 fi
 
 # --- Pacing ---
+# Output: elapsed icon indicator delta pct_label pts_label
 _s_pace=$(calc_pacing "$session_pct" "$session_reset" "$SESSION_WINDOW")
-read -r session_elapsed session_pace _discard <<< "$_s_pace"
-session_pace_pct=$(cut -d' ' -f3- <<< "$_s_pace")
+read -r session_elapsed session_pace session_pace_indicator session_pace_delta _discard <<< "$_s_pace"
+session_pace_pct=$(cut -d' ' -f5-6 <<< "$_s_pace")
+session_pace_pts=$(cut -d' ' -f7-8 <<< "$_s_pace")
 
 _w_pace=$(calc_pacing "$weekly_pct" "$weekly_reset" "$WEEKLY_WINDOW")
-read -r weekly_elapsed weekly_pace _discard <<< "$_w_pace"
-weekly_pace_pct=$(cut -d' ' -f3- <<< "$_w_pace")
+read -r weekly_elapsed weekly_pace weekly_pace_indicator weekly_pace_delta _discard <<< "$_w_pace"
+weekly_pace_pct=$(cut -d' ' -f5-6 <<< "$_w_pace")
+weekly_pace_pts=$(cut -d' ' -f7-8 <<< "$_w_pace")
+
+sonnet_elapsed=0 sonnet_pace="" sonnet_pace_indicator="" sonnet_pace_pct="" sonnet_pace_pts="" sonnet_pace_delta="0"
+if [[ "$has_sonnet" == "true" ]]; then
+    _n_pace=$(calc_pacing "$sonnet_pct" "$sonnet_reset" "$WEEKLY_WINDOW")
+    read -r sonnet_elapsed sonnet_pace sonnet_pace_indicator sonnet_pace_delta _discard <<< "$_n_pace"
+    sonnet_pace_pct=$(cut -d' ' -f5-6 <<< "$_n_pace")
+    sonnet_pace_pts=$(cut -d' ' -f7-8 <<< "$_n_pace")
+fi
+
+# --- Tooltip pace icon (ratio or point-based) ---
+if [[ "$TOOLTIP_PACE_PTS" == "true" ]]; then
+    _tip_session_pace="$session_pace_indicator"
+    _tip_weekly_pace="$weekly_pace_indicator"
+    _tip_sonnet_pace="$sonnet_pace_indicator"
+else
+    _tip_session_pace="$session_pace"
+    _tip_weekly_pace="$weekly_pace"
+    _tip_sonnet_pace="$sonnet_pace"
+fi
+
+# --- Pace colors ---
+# Sets _sp_<prefix>_{pace,indicator,pct,pts,delta,abs_delta} for apply_format.
+_precompute_pace() {
+    local pfx=$1 pace=$2 indicator=$3 pct=$4 pts=$5 delta=$6
+    if [[ "$FORMAT_PACE_COLOR" == "true" ]]; then
+        local c; c=$(pace_color_for "${delta:-0}")
+        printf -v "_sp_${pfx}_pace"      "<span foreground='%s'>%s</span>" "$c" "$pace"
+        printf -v "_sp_${pfx}_indicator" "<span foreground='%s'>%s</span>" "$c" "$indicator"
+        printf -v "_sp_${pfx}_pct"       "<span foreground='%s'>%s</span>" "$c" "$pct"
+        printf -v "_sp_${pfx}_pts"       "<span foreground='%s'>%s</span>" "$c" "$pts"
+        printf -v "_sp_${pfx}_delta"     "<span foreground='%s'>%s</span>" "$c" "$delta"
+        printf -v "_sp_${pfx}_abs_delta" "<span foreground='%s'>%s</span>" "$c" "${delta#-}"
+    else
+        printf -v "_sp_${pfx}_pace"      '%s' "$pace"
+        printf -v "_sp_${pfx}_indicator" '%s' "$indicator"
+        printf -v "_sp_${pfx}_pct"       '%s' "$pct"
+        printf -v "_sp_${pfx}_pts"       '%s' "$pts"
+        printf -v "_sp_${pfx}_delta"     '%s' "$delta"
+        printf -v "_sp_${pfx}_abs_delta" '%s' "${delta#-}"
+    fi
+}
+_precompute_pace session "$session_pace" "$session_pace_indicator" "$session_pace_pct" "$session_pace_pts" "$session_pace_delta"
+_precompute_pace weekly  "$weekly_pace"  "$weekly_pace_indicator"  "$weekly_pace_pct"  "$weekly_pace_pts"  "$weekly_pace_delta"
+_precompute_pace sonnet  "$sonnet_pace"  "$sonnet_pace_indicator"  "$sonnet_pace_pct"  "$sonnet_pace_pts"  "$sonnet_pace_delta"
 
 # --- Waybar class (granular: low, mid, high, critical) ---
 # Rate limits first; extra usage only matters when a rate limit hits 100%
@@ -486,6 +606,8 @@ else class="low"
 fi
 
 # --- Apply format placeholders ---
+# When --format-pace-color is set, pace placeholders are individually colored
+# per window based on pacing delta. Otherwise they inherit the bar color.
 apply_format() {
     local text="$1"
     text="${text//\{icon\}/󰚩}"
@@ -493,18 +615,36 @@ apply_format() {
     text="${text//\{session_pct\}/$session_pct}"
     text="${text//\{session_reset\}/$s_cd_val}"
     text="${text//\{session_elapsed\}/$session_elapsed}"
-    text="${text//\{session_pace\}/$session_pace}"
-    text="${text//\{session_pace_pct\}/$session_pace_pct}"
     text="${text//\{weekly_pct\}/$weekly_pct}"
     text="${text//\{weekly_reset\}/$w_cd_val}"
     text="${text//\{weekly_elapsed\}/$weekly_elapsed}"
-    text="${text//\{weekly_pace\}/$weekly_pace}"
-    text="${text//\{weekly_pace_pct\}/$weekly_pace_pct}"
     text="${text//\{sonnet_pct\}/$sonnet_pct}"
     text="${text//\{sonnet_reset\}/$sn_cd_val}"
+    text="${text//\{sonnet_elapsed\}/$sonnet_elapsed}"
     text="${text//\{extra_spent\}/$extra_spent}"
     text="${text//\{extra_limit\}/$extra_limit}"
     text="${text//\{extra_pct\}/$extra_pct}"
+
+    # Pace placeholders — pre-computed colored or plain depending on --format-pace-color.
+    text="${text//\{session_pace_indicator\}/$_sp_session_indicator}"
+    text="${text//\{session_pace_abs_delta\}/$_sp_session_abs_delta}"
+    text="${text//\{session_pace_delta\}/$_sp_session_delta}"
+    text="${text//\{session_pace_pct\}/$_sp_session_pct}"
+    text="${text//\{session_pace_pts\}/$_sp_session_pts}"
+    text="${text//\{session_pace\}/$_sp_session_pace}"
+    text="${text//\{weekly_pace_indicator\}/$_sp_weekly_indicator}"
+    text="${text//\{weekly_pace_abs_delta\}/$_sp_weekly_abs_delta}"
+    text="${text//\{weekly_pace_delta\}/$_sp_weekly_delta}"
+    text="${text//\{weekly_pace_pct\}/$_sp_weekly_pct}"
+    text="${text//\{weekly_pace_pts\}/$_sp_weekly_pts}"
+    text="${text//\{weekly_pace\}/$_sp_weekly_pace}"
+    text="${text//\{sonnet_pace_indicator\}/$_sp_sonnet_indicator}"
+    text="${text//\{sonnet_pace_abs_delta\}/$_sp_sonnet_abs_delta}"
+    text="${text//\{sonnet_pace_delta\}/$_sp_sonnet_delta}"
+    text="${text//\{sonnet_pace_pct\}/$_sp_sonnet_pct}"
+    text="${text//\{sonnet_pace_pts\}/$_sp_sonnet_pts}"
+    text="${text//\{sonnet_pace\}/$_sp_sonnet_pace}"
+
     printf '%s' "$text"
 }
 
@@ -532,7 +672,12 @@ case "$class" in
     critical) bar_fg="$BAR_COLOR_CRITICAL" ;;
     *)        bar_fg="$BAR_COLOR_LOW" ;;
 esac
-bar_text="<span foreground='${bar_fg}'>${BAR_ICON:+${BAR_ICON} }${bar_text}</span>"
+if [[ "$FORMAT_PACE_COLOR" == "true" ]]; then
+    # Neutral base; pace placeholders provide their own color
+    bar_text="<span foreground='${FG}'>${BAR_ICON:+${BAR_ICON} }${bar_text}</span>"
+else
+    bar_text="<span foreground='${bar_fg}'>${BAR_ICON:+${BAR_ICON} }${bar_text}</span>"
+fi
 
 # --- Tooltip ---
 if [[ -n "$TOOLTIP_FORMAT" ]]; then
@@ -542,8 +687,13 @@ else
     # Default rich Pango tooltip
     s_color=$(color_for "$session_pct")
     w_color=$(color_for "$weekly_pct")
-    s_bar=$(make_bar "$session_pct" "$s_color")
-    w_bar=$(make_bar "$weekly_pct" "$w_color")
+    if [[ "$TOOLTIP_PACE_PTS" == "true" ]]; then
+        s_bar=$(make_bar "$session_pct" "$s_color" "$session_elapsed" "$MARKER")
+        w_bar=$(make_bar "$weekly_pct" "$w_color" "$weekly_elapsed" "$MARKER")
+    else
+        s_bar=$(make_bar "$session_pct" "$s_color")
+        w_bar=$(make_bar "$weekly_pct" "$w_color")
+    fi
     s_cd="$s_cd_val"
     w_cd="$w_cd_val"
 
@@ -559,20 +709,24 @@ else
     lines+=("SEP")
     lines+=("")
     lines+=(" <span foreground='${FG}'>  󰔟  Session</span>")
-    lines+=("   ${s_bar}  <span font_weight='bold' foreground='${s_color}'>${session_pct}% ${session_pace}</span>")
+    lines+=("   ${s_bar}  <span font_weight='bold' foreground='${s_color}'>${session_pct}% ${_tip_session_pace}</span>")
     lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${s_cd}</span>")
     lines+=("")
     lines+=(" <span foreground='${FG}'>  󰃰  Weekly</span>")
-    lines+=("   ${w_bar}  <span font_weight='bold' foreground='${w_color}'>${weekly_pct}% ${weekly_pace}</span>")
+    lines+=("   ${w_bar}  <span font_weight='bold' foreground='${w_color}'>${weekly_pct}% ${_tip_weekly_pace}</span>")
     lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${w_cd}</span>")
 
     if [[ "$has_sonnet" == "true" ]]; then
         sn_color=$(color_for "$sonnet_pct")
-        sn_bar=$(make_bar "$sonnet_pct" "$sn_color")
+        if [[ "$TOOLTIP_PACE_PTS" == "true" ]]; then
+            sn_bar=$(make_bar "$sonnet_pct" "$sn_color" "$sonnet_elapsed" "$MARKER")
+        else
+            sn_bar=$(make_bar "$sonnet_pct" "$sn_color")
+        fi
         sn_cd=$(countdown "$sonnet_reset")
         lines+=("")
         lines+=(" <span foreground='${FG}'>  󱤔  Sonnet only</span>")
-        lines+=("   ${sn_bar}  <span font_weight='bold' foreground='${sn_color}'>${sonnet_pct}%</span>")
+        lines+=("   ${sn_bar}  <span font_weight='bold' foreground='${sn_color}'>${sonnet_pct}% ${_tip_sonnet_pace}</span>")
         lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${sn_cd}</span>")
     fi
 
