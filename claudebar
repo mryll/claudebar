@@ -106,7 +106,7 @@ hex_blend() {
 load_theme_colors() {
     local theme_file="$HOME/.config/omarchy/current/theme/colors.toml"
     if [[ -f "$theme_file" ]]; then
-        local accent="" cursor="" foreground="" background="" color1="" color2="" color3=""
+        local accent="" foreground="" background="" color1="" color2="" color3=""
         while IFS= read -r line; do
             # Skip comments and empty lines
             [[ "$line" =~ ^[[:space:]]*# ]] && continue
@@ -116,7 +116,6 @@ load_theme_colors() {
                 local key="${BASH_REMATCH[1]}" val="${BASH_REMATCH[2]}"
                 case "$key" in
                     accent)     accent="$val" ;;
-                    cursor)     cursor="$val" ;;
                     foreground) foreground="$val" ;;
                     background) background="$val" ;;
                     color1)     color1="$val" ;;
@@ -131,11 +130,11 @@ load_theme_colors() {
         [[ -n "$color1" ]]     && { RED="$color1"; ORANGE="$color1"; }
         [[ -n "$color2" ]]     && GREEN="$color2"
         [[ -n "$color3" ]]     && YELLOW="$color3"
-        [[ -n "$cursor" ]]     && MARKER="$cursor"
         # DIM = midpoint between foreground and background
         if [[ -n "$foreground" && -n "$background" ]]; then
             DIM=$(hex_blend "$foreground" "$background")
         fi
+        MARKER="$DIM"
         # BAR_EMPTY = slightly lighter than background (blend bg with dim)
         if [[ -n "$background" ]]; then
             BAR_EMPTY=$(hex_blend "$background" "$DIM")
@@ -190,13 +189,13 @@ color_for() {
 
 # Color based on signed pacing delta, centered around zero:
 #   <= -10  green   (well under pace, plenty of room)
-#   -10..0  yellow  (slightly under, approaching even)
-#   0..+10  orange  (slightly ahead, watch it)
+#   -10..0  yellow  (slightly under or exactly on pace)
+#   1..+9   orange  (slightly ahead, watch it)
 #   >= +10  red     (burning fast)
 pace_color_for() {
     local delta=${1:-0}
     if   (( delta >= 10 ));  then printf '%s' "$RED"
-    elif (( delta >= 0 ));   then printf '%s' "$ORANGE"
+    elif (( delta > 0 ));    then printf '%s' "$ORANGE"
     elif (( delta >= -10 )); then printf '%s' "$YELLOW"
     else printf '%s' "$GREEN"
     fi
@@ -557,11 +556,9 @@ fi
 if [[ "$TOOLTIP_PACE_PTS" == "true" ]]; then
     _tip_session_pace="$session_pace_indicator"
     _tip_weekly_pace="$weekly_pace_indicator"
-    _tip_sonnet_pace="$sonnet_pace_indicator"
 else
     _tip_session_pace="$session_pace"
     _tip_weekly_pace="$weekly_pace"
-    _tip_sonnet_pace="$sonnet_pace"
 fi
 
 # --- Pace colors ---
@@ -672,7 +669,7 @@ case "$class" in
     critical) bar_fg="$BAR_COLOR_CRITICAL" ;;
     *)        bar_fg="$BAR_COLOR_LOW" ;;
 esac
-if [[ "$FORMAT_PACE_COLOR" == "true" ]]; then
+if [[ "$FORMAT_PACE_COLOR" == "true" && "$FORMAT" == *_pace* ]]; then
     # Neutral base; pace placeholders provide their own color
     bar_text="<span foreground='${FG}'>${BAR_ICON:+${BAR_ICON} }${bar_text}</span>"
 else
@@ -726,7 +723,7 @@ else
         sn_cd=$(countdown "$sonnet_reset")
         lines+=("")
         lines+=(" <span foreground='${FG}'>  󱤔  Sonnet only</span>")
-        lines+=("   ${sn_bar}  <span font_weight='bold' foreground='${sn_color}'>${sonnet_pct}% ${_tip_sonnet_pace}</span>")
+        lines+=("   ${sn_bar}  <span font_weight='bold' foreground='${sn_color}'>${sonnet_pct}%</span>")
         lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${sn_cd}</span>")
     fi
 

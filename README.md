@@ -12,7 +12,8 @@ Waybar widget that shows your Claude AI usage limits — session, weekly, and pe
 - Session (5h) and weekly (7d) usage with countdown timers
 - Per-model tracking (Sonnet) when available
 - Extra usage tracking (spending, limit, balance) when enabled
-- Pacing indicators — are you using too fast or too slow?
+- Pacing indicators — ratio-based and point-based, with optional per-window coloring
+- Tooltip elapsed markers — visual pacing reference in progress bars
 - Colored progress bars in tooltip (Pango markup)
 - Customizable bar text and tooltip via `--format` / `--tooltip-format` placeholders
 - Granular CSS classes (`low`, `mid`, `high`, `critical`) for bar styling
@@ -205,18 +206,32 @@ Example Waybar config with custom format:
 | `{session_pct}` | Session (5h) usage % | 42 |
 | `{session_reset}` | Session countdown | 1h 30m |
 | `{session_elapsed}` | Session time elapsed % | 58 |
-| `{session_pace}` | Session pacing icon | ↑ / ↓ / → |
-| `{session_pace_pct}` | Session pacing deviation | 12% ahead |
+| `{session_pace}` | Session pacing icon (ratio-based) | ↑ / ↓ / → |
+| `{session_pace_indicator}` | Session pacing icon (point-based) | ↑ / ↓ / → |
+| `{session_pace_pct}` | Session pacing deviation (ratio) | 12% ahead |
+| `{session_pace_pts}` | Session pacing deviation (points) | 5pts ahead |
+| `{session_pace_delta}` | Session pacing delta (signed) | -12 |
+| `{session_pace_abs_delta}` | Session pacing delta (unsigned) | 12 |
 | `{weekly_pct}` | Weekly (7d all models) usage % | 27 |
 | `{weekly_reset}` | Weekly countdown | 4d 1h |
 | `{weekly_elapsed}` | Weekly time elapsed % | 42 |
-| `{weekly_pace}` | Weekly pacing icon | ↑ / ↓ / → |
-| `{weekly_pace_pct}` | Weekly pacing deviation | 5% under |
+| `{weekly_pace}` | Weekly pacing icon (ratio-based) | ↑ / ↓ / → |
+| `{weekly_pace_indicator}` | Weekly pacing icon (point-based) | ↑ / ↓ / → |
+| `{weekly_pace_pct}` | Weekly pacing deviation (ratio) | 5% under |
+| `{weekly_pace_pts}` | Weekly pacing deviation (points) | 8pts under |
+| `{weekly_pace_delta}` | Weekly pacing delta (signed) | -8 |
+| `{weekly_pace_abs_delta}` | Weekly pacing delta (unsigned) | 8 |
 | `{sonnet_pct}` | Sonnet-only weekly usage % | 4 |
 | `{sonnet_reset}` | Sonnet countdown | 2h 24m |
+| `{sonnet_elapsed}` | Sonnet time elapsed % | 42 |
+| `{sonnet_pace}` | Sonnet pacing icon (ratio-based) | ↑ / ↓ / → |
+| `{sonnet_pace_indicator}` | Sonnet pacing icon (point-based) | ↑ / ↓ / → |
+| `{sonnet_pace_pct}` | Sonnet pacing deviation (ratio) | 3% ahead |
+| `{sonnet_pace_pts}` | Sonnet pacing deviation (points) | 3pts ahead |
+| `{sonnet_pace_delta}` | Sonnet pacing delta (signed) | 3 |
+| `{sonnet_pace_abs_delta}` | Sonnet pacing delta (unsigned) | 3 |
 | `{extra_spent}` | Extra usage spent | $2.50 |
 | `{extra_limit}` | Extra usage monthly limit | $50.00 |
-| `{extra_balance}` | Extra usage balance | $47.50 |
 | `{extra_pct}` | Extra usage spent % | 5 |
 
 ### Pacing indicators
@@ -247,6 +262,57 @@ claudebar --pace-tolerance 10
 ```
 
 The `{session_pace_pct}` / `{weekly_pace_pct}` placeholders show the deviation (e.g. "12% ahead", "5% under", "on track").
+
+#### Point-based pacing
+
+In addition to ratio-based pacing, there's a point-based alternative that computes `actual_usage - expected_usage`. At 22% usage with 78% elapsed, the delta is -56 — intuitive and stable across the window.
+
+| Placeholder | Type | Example | Description |
+|---|---|---|---|
+| `{*_pace}` | Ratio | ↑ | Icon with tolerance band (±5% default) |
+| `{*_pace_indicator}` | Points | ↑ | Icon without tolerance (any non-zero = ↑/↓) |
+| `{*_pace_pct}` | Ratio | 12% ahead | Ratio-based deviation label |
+| `{*_pace_pts}` | Points | 5pts ahead | Point-based deviation label |
+| `{*_pace_delta}` | Points | -12 | Signed integer delta |
+| `{*_pace_abs_delta}` | Points | 12 | Unsigned integer delta |
+
+Replace `*` with `session`, `weekly`, or `sonnet`.
+
+### Per-window pace coloring
+
+Use `--format-pace-color` to color pace placeholders individually per window based on their point delta, instead of the global usage-based color:
+
+```bash
+claudebar --format-pace-color \
+  --format '{session_pace_indicator}{session_pace_abs_delta}·{weekly_pace_indicator}{weekly_pace_abs_delta}'
+# => ↑4·↓10  (↑4 in orange, ↓10 in green, · in neutral)
+```
+
+| Delta | Color | Meaning |
+|---|---|---|
+| ≤ -10 | Green | Well under pace |
+| -10 to 0 | Yellow | Slightly under or on pace |
+| 1 to 9 | Orange | Slightly ahead |
+| ≥ 10 | Red | Burning fast |
+
+Without this flag, the entire bar text is colored by usage percentage — identical to the default behavior.
+
+### Tooltip elapsed markers
+
+Use `--tooltip-pace-pts` to add an elapsed marker (`█`) to each tooltip progress bar, showing where even pacing would put you:
+
+```
+Without --tooltip-pace-pts:
+  Session
+    █████░░░░░░░░░░░░░░░  27% ↑
+
+With --tooltip-pace-pts:
+  Session
+    █████░░░░░█░░░░░░░░░  27% ↑
+                  ^ marker at 32% (even pace position)
+```
+
+The marker color adapts to the active theme. Without this flag, the tooltip is unchanged.
 
 ### Spacing
 
