@@ -328,12 +328,29 @@ expires_s=$(( expires_at / 1000 ))
 auth_ok=true
 syncing=false
 
-# Helper: refresh token, fetch usage, write cache (used by background sync)
+# Helper: refresh token, fetch usage, write cache (used by background sync).
+# Waits for a global IPv4 address (DHCP complete), then retries the token
+# refresh. On success writes cache and signals waybar via RTMIN+13.
 _do_refresh_and_fetch() {
     local _resp _at _nr _ei _nea _tmp _usage
-    for (( _try=1; _try<=12; _try++ )); do
-        (( _try > 1 )) && sleep $(( _try < 4 ? 5 : 10 ))
-        _resp=$(curl -sf --max-time 5 -X POST "$TOKEN_URL" \
+    mkdir -p "$CACHE_DIR"
+    # Prevent duplicate concurrent helpers (multi-monitor, overlapping polls)
+    local _synclock="$CACHE_DIR/.sync.lock"
+    exec 8>"$_synclock"
+    flock -n 8 || return 0
+    # Wait for a routable network (default route + global IP = DHCP done).
+    # Both conditions required to avoid false positives from docker/libvirt bridges.
+    # Polls every 1s for up to 30s — typical DHCP takes 5-10s after boot.
+    for (( _nw=0; _nw < 30; _nw++ )); do
+        ip route show default 2>/dev/null | grep -q . && \
+            ip -4 addr show scope global 2>/dev/null | grep -q 'inet ' && break
+        sleep 1
+    done
+    # Brief settle time for DNS resolver after DHCP
+    sleep 1
+    for (( _try=1; _try<=6; _try++ )); do
+        (( _try > 1 )) && sleep 3
+        _resp=$(curl -sf --max-time 8 -X POST "$TOKEN_URL" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "grant_type=refresh_token&client_id=${CLIENT_ID}&refresh_token=${refresh_token}") || true
         if [[ -n "$_resp" ]] && jq -e '.access_token' <<< "$_resp" &>/dev/null; then
@@ -349,29 +366,23 @@ _do_refresh_and_fetch() {
                 -H "Authorization: Bearer $_at" \
                 -H "anthropic-beta: oauth-2025-04-20") || true
             if [[ -n "$_usage" ]] && jq -e '.five_hour' <<< "$_usage" &>/dev/null; then
-                mkdir -p "$CACHE_DIR"
                 local _ctmp
                 _ctmp=$(mktemp "$CACHE_DIR/.usage.XXXXXX")
                 printf '%s' "$_usage" > "$_ctmp" && mv "$_ctmp" "$CACHE_DIR/usage.json"
                 rm -f "$CACHE_DIR/.stale" "$CACHE_DIR/.last_error"
             fi
             pkill -RTMIN+13 waybar 2>/dev/null || true
+            exec 8>&-
             return 0
         fi
     done
+    exec 8>&-
     return 1
 }
 
-# Use longer timeout on cold start (boot) — network may still be coming up
-_refresh_timeout=3
-if [[ ! -f "$CACHE_DIR/usage.json" ]] || \
-   (( $(date +%s) - $(date -r "$CACHE_DIR/usage.json" +%s 2>/dev/null || echo 0) > CACHE_TTL )); then
-    _refresh_timeout=10
-fi
-
 if (( expires_s < now_s + REFRESH_BUFFER )); then
-    # Quick attempt — 10s on cold start (boot), 3s mid-session
-    resp=$(curl -sf --max-time "$_refresh_timeout" -X POST "$TOKEN_URL" \
+    # Quick attempt (3s timeout) — succeeds if network is already up
+    resp=$(curl -sf --max-time 3 -X POST "$TOKEN_URL" \
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=refresh_token&client_id=${CLIENT_ID}&refresh_token=${refresh_token}") || true
 
@@ -388,9 +399,9 @@ if (( expires_s < now_s + REFRESH_BUFFER )); then
            '.claudeAiOauth.accessToken=$at | .claudeAiOauth.refreshToken=$rt | .claudeAiOauth.expiresAt=$ea' \
            "$CREDS" > "$tmp" && mv "$tmp" "$CREDS"
     else
-        # Quick attempt failed (likely boot, network not ready)
-        # Retry in background so we can show a loading state now
-        _do_refresh_and_fetch &>/dev/null &
+        # Quick attempt failed — show "Loading" immediately, refresh in background.
+        # disown prevents SIGHUP if the parent shell is killed.
+        _do_refresh_and_fetch &>/dev/null & disown
         auth_ok=false
         syncing=true
     fi
@@ -419,7 +430,7 @@ _fetch_usage() {
             if (( stale_age > SESSION_WINDOW )); then
                 rm -f "$cache_file" "$stale_marker" "$CACHE_DIR/.last_error"
                 if [[ "$syncing" == "true" ]]; then
-                    jq -nc --arg t "${BAR_ICON:+${BAR_ICON} }↻" '{text:$t, tooltip:"Syncing with Claude...", class:"low"}'
+                    jq -nc --arg t "${BAR_ICON:+${BAR_ICON} }Loading…" '{text:$t, tooltip:"Loading…", class:"low"}'
                     exit 0
                 fi
                 die "Session expired.\nRun <b>claude</b> to re-login."
@@ -435,7 +446,7 @@ _fetch_usage() {
             fi
         else
             if [[ "$syncing" == "true" ]]; then
-                jq -nc --arg t "${BAR_ICON:+${BAR_ICON} }↻" '{text:$t, tooltip:"Syncing with Claude...", class:"low"}'
+                jq -nc --arg t "${BAR_ICON:+${BAR_ICON} }Loading…" '{text:$t, tooltip:"Loading…", class:"low"}'
                 exit 0
             fi
             die "Session expired.\nRun <b>claude</b> to re-login."
