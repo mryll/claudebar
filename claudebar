@@ -326,63 +326,10 @@ expires_at="${expires_at%%.*}" # truncate float (e.g. 5000.0 → 5000)
 [[ "$expires_at" =~ ^[0-9]+$ ]] || expires_at=0
 expires_s=$(( expires_at / 1000 ))
 auth_ok=true
-syncing=false
-
-# Helper: refresh token, fetch usage, write cache (used by background sync).
-# Waits for a global IPv4 address (DHCP complete), then retries the token
-# refresh. On success writes cache and signals waybar via RTMIN+13.
-_do_refresh_and_fetch() {
-    local _resp _at _nr _ei _nea _tmp _usage
-    mkdir -p "$CACHE_DIR"
-    # Prevent duplicate concurrent helpers (multi-monitor, overlapping polls)
-    local _synclock="$CACHE_DIR/.sync.lock"
-    exec 8>"$_synclock"
-    flock -n 8 || return 0
-    # Wait for a routable network (default route + global IP = DHCP done).
-    # Both conditions required to avoid false positives from docker/libvirt bridges.
-    # Polls every 1s for up to 30s — typical DHCP takes 5-10s after boot.
-    for (( _nw=0; _nw < 30; _nw++ )); do
-        ip route show default 2>/dev/null | grep -q . && \
-            ip -4 addr show scope global 2>/dev/null | grep -q 'inet ' && break
-        sleep 1
-    done
-    # Brief settle time for DNS resolver after DHCP
-    sleep 1
-    for (( _try=1; _try<=6; _try++ )); do
-        (( _try > 1 )) && sleep 3
-        _resp=$(curl -sf --max-time 8 -X POST "$TOKEN_URL" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=refresh_token&client_id=${CLIENT_ID}&refresh_token=${refresh_token}") || true
-        if [[ -n "$_resp" ]] && jq -e '.access_token' <<< "$_resp" &>/dev/null; then
-            _at=$(jq -r '.access_token' <<< "$_resp")
-            _nr=$(jq -r '.refresh_token // empty' <<< "$_resp")
-            _ei=$(jq -r '.expires_in' <<< "$_resp")
-            _nea=$(( $(date +%s) * 1000 + _ei * 1000 ))
-            _tmp=$(mktemp)
-            jq --arg at "$_at" --arg rt "${_nr:-$refresh_token}" --argjson ea "$_nea" \
-                '.claudeAiOauth.accessToken=$at | .claudeAiOauth.refreshToken=$rt | .claudeAiOauth.expiresAt=$ea' \
-                "$CREDS" > "$_tmp" && mv "$_tmp" "$CREDS"
-            _usage=$(curl -sf --max-time 10 "$API_URL" \
-                -H "Authorization: Bearer $_at" \
-                -H "anthropic-beta: oauth-2025-04-20") || true
-            if [[ -n "$_usage" ]] && jq -e '.five_hour' <<< "$_usage" &>/dev/null; then
-                local _ctmp
-                _ctmp=$(mktemp "$CACHE_DIR/.usage.XXXXXX")
-                printf '%s' "$_usage" > "$_ctmp" && mv "$_ctmp" "$CACHE_DIR/usage.json"
-                rm -f "$CACHE_DIR/.stale" "$CACHE_DIR/.last_error"
-            fi
-            pkill -RTMIN+13 waybar 2>/dev/null || true
-            exec 8>&-
-            return 0
-        fi
-    done
-    exec 8>&-
-    return 1
-}
 
 if (( expires_s < now_s + REFRESH_BUFFER )); then
-    # Quick attempt (3s timeout) — succeeds if network is already up
-    resp=$(curl -sf --max-time 3 -X POST "$TOKEN_URL" \
+    # Synchronous refresh — 15s timeout covers cold boot when DHCP is still settling.
+    resp=$(curl -sf --max-time 15 -X POST "$TOKEN_URL" \
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "grant_type=refresh_token&client_id=${CLIENT_ID}&refresh_token=${refresh_token}") || true
 
@@ -390,6 +337,8 @@ if (( expires_s < now_s + REFRESH_BUFFER )); then
         access_token=$(jq -r '.access_token' <<< "$resp")
         new_refresh=$(jq -r '.refresh_token // empty' <<< "$resp")
         expires_in=$(jq -r '.expires_in' <<< "$resp")
+        expires_in="${expires_in%%.*}" # truncate float (e.g. 3600.0 → 3600)
+        [[ "$expires_in" =~ ^[0-9]+$ ]] || expires_in=3600
         new_expires_at=$(( $(date +%s) * 1000 + expires_in * 1000 ))
 
         tmp=$(mktemp)
@@ -399,11 +348,7 @@ if (( expires_s < now_s + REFRESH_BUFFER )); then
            '.claudeAiOauth.accessToken=$at | .claudeAiOauth.refreshToken=$rt | .claudeAiOauth.expiresAt=$ea' \
            "$CREDS" > "$tmp" && mv "$tmp" "$CREDS"
     else
-        # Quick attempt failed — show "Loading" immediately, refresh in background.
-        # disown prevents SIGHUP if the parent shell is killed.
-        _do_refresh_and_fetch &>/dev/null & disown
         auth_ok=false
-        syncing=true
     fi
 fi
 
@@ -415,74 +360,59 @@ stale_marker="$CACHE_DIR/.stale"
 _lockfile="$CACHE_DIR/.fetch.lock"
 
 _fetch_usage() {
-    use_cache=false
+    local cache_age=0
     if [[ -f "$cache_file" ]]; then
         cache_age=$(( $(date +%s) - $(date -r "$cache_file" +%s) ))
-        (( cache_age < CACHE_TTL )) && use_cache=true
+        if (( cache_age < CACHE_TTL )); then
+            usage=$(<"$cache_file")
+            return
+        fi
     fi
 
-    if [[ "$use_cache" == "true" ]]; then
-        usage=$(<"$cache_file")
-    elif [[ "$auth_ok" == "false" ]]; then
-        # Auth failed — show loading if syncing in background, or fall back to stale cache
-        if [[ -f "$cache_file" ]]; then
-            stale_age=$(( $(date +%s) - $(date -r "$cache_file" +%s) ))
-            if (( stale_age > SESSION_WINDOW )); then
-                rm -f "$cache_file" "$stale_marker" "$CACHE_DIR/.last_error"
-                if [[ "$syncing" == "true" ]]; then
-                    jq -nc --arg t "${BAR_ICON:+${BAR_ICON} }Loading…" '{text:$t, tooltip:"Loading…", class:"low"}'
-                    exit 0
-                fi
-                die "Session expired.\nRun <b>claude</b> to re-login."
-            fi
+    if [[ "$auth_ok" == "false" ]]; then
+        # Token refresh failed — use stale cache if recent enough, otherwise error
+        if [[ -f "$cache_file" ]] && (( cache_age <= SESSION_WINDOW )); then
             usage=$(<"$cache_file")
             rm -f "$CACHE_DIR/.last_error"
-            # Notify once per failure (avoid spamming) — skip if syncing
-            if [[ "$syncing" != "true" ]] && [[ ! -f "$stale_marker" ]]; then
+            if [[ ! -f "$stale_marker" ]]; then
                 touch "$stale_marker"
                 command -v notify-send &>/dev/null && \
                     notify-send -u normal -i dialog-warning \
-                        "Claude Usage" "Session expired. Run <b>claude</b> to re-login." 2>/dev/null || true
+                        "Claude Usage" "Token refresh failed. Check connection or run <b>claude</b>." 2>/dev/null || true
             fi
         else
-            if [[ "$syncing" == "true" ]]; then
-                jq -nc --arg t "${BAR_ICON:+${BAR_ICON} }Loading…" '{text:$t, tooltip:"Loading…", class:"low"}'
-                exit 0
-            fi
-            die "Session expired.\nRun <b>claude</b> to re-login."
+            die "Token refresh failed.\nCheck connection or run <b>claude</b>."
+        fi
+        return
+    fi
+
+    # Auth OK — fetch from API
+    _resp_body=$(curl -s --max-time 10 -w '\n%{http_code}' "$API_URL" \
+        -H "Authorization: Bearer $access_token" \
+        -H "anthropic-beta: oauth-2025-04-20") || true
+    _http_code="${_resp_body##*$'\n'}"
+    _resp_body="${_resp_body%$'\n'"$_http_code"}"
+
+    if [[ "$_http_code" == "200" ]] && [[ -n "$_resp_body" ]] && jq -e '.five_hour' <<< "$_resp_body" &>/dev/null; then
+        usage="$_resp_body"
+        _ctmp=$(mktemp "$CACHE_DIR/.usage.XXXXXX")
+        printf '%s' "$usage" > "$_ctmp" && mv "$_ctmp" "$cache_file"
+        rm -f "$stale_marker" "$CACHE_DIR/.last_error"
+    elif [[ -f "$cache_file" ]]; then
+        usage=$(<"$cache_file")
+        touch "$stale_marker"
+        if [[ "$_http_code" =~ ^[45][0-9]{2}$ ]]; then
+            _err_msg=$(jq -r '.error.message // empty' <<< "$_resp_body" 2>/dev/null) || true
+            printf '%s\n%s' "$_http_code" "$_err_msg" > "$CACHE_DIR/.last_error"
         fi
     else
-        _http_code=""
-        _resp_body=""
-        _resp_body=$(curl -s --max-time 10 -w '\n%{http_code}' "$API_URL" \
-            -H "Authorization: Bearer $access_token" \
-            -H "anthropic-beta: oauth-2025-04-20") || true
-        _http_code="${_resp_body##*$'\n'}"
-        _resp_body="${_resp_body%$'\n'"$_http_code"}"
-
-        if [[ "$_http_code" == "200" ]] && [[ -n "$_resp_body" ]] && jq -e '.five_hour' <<< "$_resp_body" &>/dev/null; then
-            usage="$_resp_body"
-            _ctmp=$(mktemp "$CACHE_DIR/.usage.XXXXXX")
-            printf '%s' "$usage" > "$_ctmp" && mv "$_ctmp" "$cache_file"
-            rm -f "$stale_marker" "$CACHE_DIR/.last_error"
-        elif [[ -f "$cache_file" ]]; then
-            # API failed — fall back to stale cache
-            usage=$(<"$cache_file")
-            touch "$stale_marker"
-            # Only persist real HTTP error codes (4xx/5xx) for tooltip
-            if [[ "$_http_code" =~ ^[45][0-9]{2}$ ]]; then
-                _err_msg=$(jq -r '.error.message // empty' <<< "$_resp_body" 2>/dev/null) || true
-                printf '%s\n%s' "$_http_code" "$_err_msg" > "$CACHE_DIR/.last_error"
-            fi
-        else
-            die "API request failed.\nCheck your connection."
-        fi
+        die "API request failed.\nCheck your connection."
     fi
 }
 
 # Serialize concurrent instances (multi-monitor) so only one hits the API
 exec 9>"$_lockfile"
-flock -w 15 9
+flock -w 15 9 || die "Cache lock timeout"
 _fetch_usage
 exec 9>&-
 
@@ -662,13 +592,9 @@ w_cd_val=$(countdown "$weekly_reset")
 sn_cd_val=""
 [[ "$has_sonnet" == "true" ]] && sn_cd_val=$(countdown "$sonnet_reset")
 
-# Add sync/stale indicator
+# Stale data indicator
 stale_icon=""
-if [[ "$syncing" == "true" ]]; then
-    stale_icon=" ↻"
-elif [[ -f "$stale_marker" ]]; then
-    stale_icon=" ⏸"
-fi
+[[ -f "$stale_marker" ]] && stale_icon=" ⏸"
 
 bar_text=$(apply_format "$FORMAT")${stale_icon}
 
