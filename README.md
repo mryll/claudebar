@@ -356,4 +356,5 @@ API responses are cached in `~/.cache/claudebar/usage.json` for 60 seconds. This
 - [meteobar](https://github.com/mryll/meteobar) — Weather widget for Waybar (Open-Meteo)
 - [ClaudeBar](https://github.com/andresreibel/ClaudeBar) — Similar widget using TypeScript/Bun
 - [waybar-ai-usage](https://github.com/NihilDigit/waybar-ai-usage) — Claude + Codex monitor (Python, uses browser cookies)
+- [Omarchy](https://github.com/basecamp/omarchy) — Beautiful, modern & opinionated Linux distribution
 - [Waybar](https://github.com/Alexays/Waybar) — Status bar for Wayland compositors
