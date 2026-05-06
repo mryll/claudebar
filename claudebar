@@ -330,8 +330,10 @@ auth_ok=true
 if (( expires_s < now_s + REFRESH_BUFFER )); then
     # Synchronous refresh — 15s timeout covers cold boot when DHCP is still settling.
     resp=$(curl -sf --max-time 15 -X POST "$TOKEN_URL" \
-        -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "grant_type=refresh_token&client_id=${CLIENT_ID}&refresh_token=${refresh_token}") || true
+        -H "Content-Type: application/json" \
+        -H "anthropic-beta: oauth-2025-04-20" \
+        -H "User-Agent: claude-cli/1.0" \
+        --data "{\"grant_type\":\"refresh_token\",\"client_id\":\"${CLIENT_ID}\",\"refresh_token\":\"${refresh_token}\"}") || true
 
     if [[ -n "$resp" ]] && jq -e '.access_token' <<< "$resp" &>/dev/null; then
         access_token=$(jq -r '.access_token' <<< "$resp")
