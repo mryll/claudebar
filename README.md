@@ -206,6 +206,7 @@ Example Waybar config with custom format:
 | `{session_pct}` | Session (5h) usage % | 42 |
 | `{session_reset}` | Session countdown | 1h 30m |
 | `{session_elapsed}` | Session time elapsed % | 58 |
+| `{session_bar}` | Session usage progress bar (Pango) | `████████░░░░░░░░░░░░` |
 | `{session_pace}` | Session pacing icon (ratio-based) | ↑ / ↓ / → |
 | `{session_pace_indicator}` | Session pacing icon (point-based) | ↑ / ↓ / → |
 | `{session_pace_pct}` | Session pacing deviation (ratio) | 12% ahead |
@@ -215,6 +216,7 @@ Example Waybar config with custom format:
 | `{weekly_pct}` | Weekly (7d all models) usage % | 27 |
 | `{weekly_reset}` | Weekly countdown | 4d 1h |
 | `{weekly_elapsed}` | Weekly time elapsed % | 42 |
+| `{weekly_bar}` | Weekly usage progress bar (Pango) | `█████░░░░░░░░░░░░░░░` |
 | `{weekly_pace}` | Weekly pacing icon (ratio-based) | ↑ / ↓ / → |
 | `{weekly_pace_indicator}` | Weekly pacing icon (point-based) | ↑ / ↓ / → |
 | `{weekly_pace_pct}` | Weekly pacing deviation (ratio) | 5% under |
@@ -224,6 +226,7 @@ Example Waybar config with custom format:
 | `{sonnet_pct}` | Sonnet-only weekly usage % | 4 |
 | `{sonnet_reset}` | Sonnet countdown | 2h 24m |
 | `{sonnet_elapsed}` | Sonnet time elapsed % | 42 |
+| `{sonnet_bar}` | Sonnet usage progress bar (Pango) | `░░░░░░░░░░░░░░░░░░░░` |
 | `{sonnet_pace}` | Sonnet pacing icon (ratio-based) | ↑ / ↓ / → |
 | `{sonnet_pace_indicator}` | Sonnet pacing icon (point-based) | ↑ / ↓ / → |
 | `{sonnet_pace_pct}` | Sonnet pacing deviation (ratio) | 3% ahead |
@@ -233,6 +236,10 @@ Example Waybar config with custom format:
 | `{extra_spent}` | Extra usage spent | $2.50 |
 | `{extra_limit}` | Extra usage monthly limit | $50.00 |
 | `{extra_pct}` | Extra usage spent % | 5 |
+| `{extra_bar}` | Extra usage progress bar (Pango) | `█░░░░░░░░░░░░░░░░░░░` |
+
+> [!NOTE]
+> Bar placeholders are colored by their own window's usage thresholds (low/mid/high/critical), independently of the surrounding bar text color, which reflects the worst window overall. A `{session_bar}` can render green while the surrounding text is red because weekly or sonnet hit the critical threshold.
 
 ### Pacing indicators
 

@@ -13,6 +13,7 @@
 #   {session_pct}       Session (5h) usage %
 #   {session_reset}     Session countdown (e.g. "1h 30m")
 #   {session_elapsed}   Session time elapsed % (e.g. "58")
+#   {session_bar}       Session usage progress bar (Pango-colored)
 #   {session_pace}           Session pacing icon, ratio-based (↑ ↓ →)
 #   {session_pace_indicator} Session pacing icon, point-based (↑ ↓ →)
 #   {session_pace_pct}       Session pacing deviation, ratio (e.g. "72% ahead")
@@ -22,6 +23,7 @@
 #   {weekly_pct}        Weekly (7d all models) usage %
 #   {weekly_reset}      Weekly countdown (e.g. "4d 1h")
 #   {weekly_elapsed}    Weekly time elapsed % (e.g. "42")
+#   {weekly_bar}        Weekly usage progress bar (Pango-colored)
 #   {weekly_pace}            Weekly pacing icon, ratio-based (↑ ↓ →)
 #   {weekly_pace_indicator}  Weekly pacing icon, point-based (↑ ↓ →)
 #   {weekly_pace_pct}        Weekly pacing deviation, ratio (e.g. "72% ahead")
@@ -31,6 +33,7 @@
 #   {sonnet_pct}        Sonnet-only weekly usage %
 #   {sonnet_reset}      Sonnet countdown
 #   {sonnet_elapsed}    Sonnet time elapsed % (e.g. "42")
+#   {sonnet_bar}        Sonnet usage progress bar (Pango-colored)
 #   {sonnet_pace}            Sonnet pacing icon, ratio-based (↑ ↓ →)
 #   {sonnet_pace_indicator}  Sonnet pacing icon, point-based (↑ ↓ →)
 #   {sonnet_pace_pct}        Sonnet pacing deviation, ratio (e.g. "72% ahead")
@@ -40,8 +43,11 @@
 #   {extra_spent}       Extra usage spent (e.g. "$2.50")
 #   {extra_limit}       Extra usage monthly limit (e.g. "$50.00")
 #   {extra_pct}         Extra usage spent %
+#   {extra_bar}         Extra usage progress bar (Pango-colored)
 #
 # Default format: "{session_pct}% · {session_reset}"
+# Note: bar placeholders are colored by their own window's usage, independent of
+#       the surrounding bar text color (which reflects the worst window).
 
 set -euo pipefail
 
@@ -631,7 +637,10 @@ apply_format() {
     text="${text//\{extra_spent\}/$extra_spent}"
     text="${text//\{extra_limit\}/$extra_limit}"
     text="${text//\{extra_pct\}/$extra_pct}"
-    text="${text//\{session_bar\}/$s_bar}"
+    text="${text//\{session_bar\}/$format_session_bar}"
+    text="${text//\{weekly_bar\}/$format_weekly_bar}"
+    text="${text//\{sonnet_bar\}/$format_sonnet_bar}"
+    text="${text//\{extra_bar\}/$format_extra_bar}"
 
     # Pace placeholders — pre-computed colored or plain depending on --format-pace-color.
     text="${text//\{session_pace_indicator\}/$_sp_session_indicator}"
@@ -662,8 +671,16 @@ w_cd_val=$(countdown "$weekly_reset")
 sn_cd_val=""
 [[ "$has_sonnet" == "true" ]] && sn_cd_val=$(countdown "$sonnet_reset")
 
-s_color=$(color_for "$session_pct")
-s_bar=$(make_bar "$session_pct" "$s_color")
+# Per-window colors and bars used by --format / --tooltip-format placeholders.
+# Each bar is colored by its own window's usage, independent of the bar text wrapper.
+session_color=$(color_for "$session_pct")
+weekly_color=$(color_for "$weekly_pct")
+sonnet_color=$(color_for "$sonnet_pct")
+extra_color=$(color_for "$extra_pct")
+format_session_bar=$(make_bar "$session_pct" "$session_color")
+format_weekly_bar=$(make_bar "$weekly_pct" "$weekly_color")
+format_sonnet_bar=$(make_bar "$sonnet_pct" "$sonnet_color")
+format_extra_bar=$(make_bar "$extra_pct" "$extra_color")
 
 # Stale data indicator
 stale_icon=""
@@ -691,15 +708,13 @@ if [[ -n "$TOOLTIP_FORMAT" ]]; then
     # Custom tooltip via --tooltip-format
     t=$(apply_format "$TOOLTIP_FORMAT")
 else
-    # Default rich Pango tooltip
-    s_color=$(color_for "$session_pct")
-    w_color=$(color_for "$weekly_pct")
+    # Default rich Pango tooltip — tooltip-specific bars may carry an elapsed marker.
     if [[ "$TOOLTIP_PACE_PTS" == "true" ]]; then
-        s_bar=$(make_bar "$session_pct" "$s_color" "$session_elapsed" "$MARKER")
-        w_bar=$(make_bar "$weekly_pct" "$w_color" "$weekly_elapsed" "$MARKER")
+        tip_session_bar=$(make_bar "$session_pct" "$session_color" "$session_elapsed" "$MARKER")
+        tip_weekly_bar=$(make_bar "$weekly_pct" "$weekly_color" "$weekly_elapsed" "$MARKER")
     else
-        s_bar=$(make_bar "$session_pct" "$s_color")
-        w_bar=$(make_bar "$weekly_pct" "$w_color")
+        tip_session_bar="$format_session_bar"
+        tip_weekly_bar="$format_weekly_bar"
     fi
     s_cd="$s_cd_val"
     w_cd="$w_cd_val"
@@ -716,34 +731,31 @@ else
     lines+=("SEP")
     lines+=("")
     lines+=(" <span foreground='${FG}'>  󰔟  Session</span>")
-    lines+=("   ${s_bar}  <span font_weight='bold' foreground='${s_color}'>${session_pct}% ${_tip_session_pace}</span>")
+    lines+=("   ${tip_session_bar}  <span font_weight='bold' foreground='${session_color}'>${session_pct}% ${_tip_session_pace}</span>")
     lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${s_cd}</span>")
     lines+=("")
     lines+=(" <span foreground='${FG}'>  󰃰  Weekly</span>")
-    lines+=("   ${w_bar}  <span font_weight='bold' foreground='${w_color}'>${weekly_pct}% ${_tip_weekly_pace}</span>")
+    lines+=("   ${tip_weekly_bar}  <span font_weight='bold' foreground='${weekly_color}'>${weekly_pct}% ${_tip_weekly_pace}</span>")
     lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${w_cd}</span>")
 
     if [[ "$has_sonnet" == "true" ]]; then
-        sn_color=$(color_for "$sonnet_pct")
         if [[ "$TOOLTIP_PACE_PTS" == "true" ]]; then
-            sn_bar=$(make_bar "$sonnet_pct" "$sn_color" "$sonnet_elapsed" "$MARKER")
+            tip_sonnet_bar=$(make_bar "$sonnet_pct" "$sonnet_color" "$sonnet_elapsed" "$MARKER")
         else
-            sn_bar=$(make_bar "$sonnet_pct" "$sn_color")
+            tip_sonnet_bar="$format_sonnet_bar"
         fi
         sn_cd=$(countdown "$sonnet_reset")
         lines+=("")
         lines+=(" <span foreground='${FG}'>  󱤔  Sonnet only</span>")
-        lines+=("   ${sn_bar}  <span font_weight='bold' foreground='${sn_color}'>${sonnet_pct}%</span>")
+        lines+=("   ${tip_sonnet_bar}  <span font_weight='bold' foreground='${sonnet_color}'>${sonnet_pct}%</span>")
         lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${sn_cd}</span>")
     fi
 
     if [[ "$extra_enabled" == "true" ]]; then
-        ex_color=$(color_for "$extra_pct")
-        ex_bar=$(make_bar "$extra_pct" "$ex_color")
         lines+=("")
         lines+=("SEP")
         lines+=(" <span foreground='${FG}'>  󰄑  Extra usage</span>")
-        lines+=("   ${ex_bar}  <span font_weight='bold' foreground='${ex_color}'>${extra_spent}</span>")
+        lines+=("   ${format_extra_bar}  <span font_weight='bold' foreground='${extra_color}'>${extra_spent}</span>")
         lines+=(" <span foreground='${DIM}'>  󰀓  Limit: ${extra_limit}</span>")
     fi
 
