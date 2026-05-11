@@ -631,6 +631,7 @@ apply_format() {
     text="${text//\{extra_spent\}/$extra_spent}"
     text="${text//\{extra_limit\}/$extra_limit}"
     text="${text//\{extra_pct\}/$extra_pct}"
+    text="${text//\{session_bar\}/$s_bar}"
 
     # Pace placeholders — pre-computed colored or plain depending on --format-pace-color.
     text="${text//\{session_pace_indicator\}/$_sp_session_indicator}"
@@ -660,6 +661,9 @@ s_cd_val=$(countdown "$session_reset")
 w_cd_val=$(countdown "$weekly_reset")
 sn_cd_val=""
 [[ "$has_sonnet" == "true" ]] && sn_cd_val=$(countdown "$sonnet_reset")
+
+s_color=$(color_for "$session_pct")
+s_bar=$(make_bar "$session_pct" "$s_color")
 
 # Stale data indicator
 stale_icon=""
