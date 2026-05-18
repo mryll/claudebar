@@ -492,10 +492,11 @@ _fetch_usage
 exec 9>&-
 
 # --- Parse windows ---
+# round in jq -> integer literal. A bare float ("13.0") fed to printf '%.0f'
+# is rejected as "invalid number" under comma-decimal locales (es_AR, de_DE, ...),
+# where strtod won't accept the period.
 parse_pct() {
-    local val
-    val=$(jq -r ".$1.utilization // 0" <<< "$usage")
-    printf '%.0f' "$val"
+    jq -r "(.$1.utilization // 0) | round" <<< "$usage"
 }
 
 parse_reset() {
