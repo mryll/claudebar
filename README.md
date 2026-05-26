@@ -62,7 +62,7 @@ make uninstall PREFIX=~/.local
 ### Quick install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mryll/claudebar/main/claudebar \
+curl -fsSL https://raw.githubusercontent.com/mryll/claudebar/master/claudebar \
   -o ~/.local/bin/claudebar && chmod +x ~/.local/bin/claudebar
 ```
 
