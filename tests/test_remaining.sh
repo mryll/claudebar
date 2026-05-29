@@ -54,4 +54,36 @@ assert_tip_has "no-flag tooltip usage 40%" "40%"
 run_claudebar '{"five_hour":{"utilization":"oops"},"seven_day":{"utilization":null},"seven_day_sonnet":"nope"}' --remaining --tooltip-pace-pts
 assert_exit0 "--remaining malformed: exit 0"; assert_json_valid "--remaining malformed: valid JSON"
 
+# extra_usage is NEVER remaining-framed, even under --remaining (still "$X / Limit $Y")
+EX='{"five_hour":{"utilization":40,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":10,"resets_at":"2030-01-01T00:00:00+00:00"},"extra_usage":{"is_enabled":true,"used_credits":250,"monthly_limit":5000}}'
+run_claudebar "$EX" --remaining
+assert_exit0 "extra under --remaining: exit 0"; assert_json_valid "extra under --remaining: valid JSON"
+assert_tip_has "extra still shows dollar limit" "Limit:"
+
+# --remaining --tooltip-pace-pts -> battery bars WITH marker (marker glyph present)
+run_claudebar "$FIX" --remaining --tooltip-pace-pts
+assert_exit0 "--remaining pace-pts: exit 0"; assert_json_valid "--remaining pace-pts: valid JSON"
+
+# --remaining --tooltip-format Y keeps Y (no header label, custom content)
+run_claudebar "$FIX" --remaining --tooltip-format 'CUSTOM {session_remaining_pct}'
+assert_tip_has "custom tooltip-format honored" "CUSTOM 60"
+_plain .tooltip | grep -qF -- "· Remaining" && _no "custom tooltip no label" "leaked label" || _ok "custom tooltip no label"
+
+# --remaining --tooltip-format '' is treated as unset -> default remaining tooltip renders
+run_claudebar "$FIX" --remaining --tooltip-format ''
+assert_tip_has "empty tooltip-format -> default remaining tooltip" "· Remaining"
+
+# --remaining --format-pace-color with a *_pace* format -> no conflict, exit 0
+run_claudebar "$FIX" --remaining --format-pace-color --format '{session_pace} {session_remaining_pct}%'
+assert_exit0 "--remaining + pace-color: exit 0"; assert_json_valid "--remaining + pace-color: valid JSON"
+
+# never-crash sweep under --remaining for hardened-payload abuse
+for bad in '{"five_hour":{"utilization":1e100},"seven_day":{"utilization":5}}' \
+           '{"five_hour":{"utilization":-100000},"seven_day":{"utilization":5}}' \
+           'not json' \
+           '{"five_hour":{"utilization":5}} {"seven_day":{"utilization":5}}'; do
+    run_claudebar "$bad" --remaining --tooltip-pace-pts
+    assert_exit0 "never-crash --remaining: exit 0"; assert_json_valid "never-crash --remaining: valid JSON"
+done
+
 finish
