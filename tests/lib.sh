@@ -31,6 +31,6 @@ assert_exit0()      { [[ "$RC" -eq 0 ]] && _ok "$1" || _no "$1" "exit=$RC"; }
 assert_json_valid() { jq -e . >/dev/null 2>&1 <<<"$OUT" && _ok "$1" || _no "$1" "invalid JSON: $OUT"; }
 _plain() { jq -r "$1" <<<"$OUT" | sed 's/<[^>]*>//g'; }
 assert_text_has()  { _plain .text | grep -qF -- "$2" && _ok "$1" || _no "$1" "text lacks: $2"; }
-assert_class()    { [[ "$(jq -r .class <<<"$OUT")" == "$2" ]] && _ok "$1" || _no "$1" "class=$(jq -r .class <<<"$OUT") want=$2"; }
+assert_class() { local c; c=$(jq -r .class <<<"$OUT"); [[ "$c" == "$2" ]] && _ok "$1" || _no "$1" "class=$c want=$2"; }
 assert_tip_has()  { _plain .tooltip | grep -qF -- "$2" && _ok "$1" || _no "$1" "tooltip lacks: $2"; }
 finish() { printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"; [[ "$FAIL" -eq 0 ]]; }
