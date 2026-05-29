@@ -1,15 +1,33 @@
 #!/usr/bin/env bash
-# Regression guard: no behavior change for VALID data. Compares current claudebar
-# vs the pre-hardening base commit, same instant (tooltip embeds wall-clock time),
-# normalizing the volatile "Updated HH:MM" minute.
+# Backward-compat guard: NO behavior change for existing usage. Compares the current
+# script vs the immediate pre-remaining commit, same instant (tooltip embeds wall-clock
+# time), over a matrix of fixtures × existing flags — all WITHOUT --remaining.
 source "$(dirname "$0")/lib.sh"
-BASE_REF="${BASE_REF:-7630722}"
+BASE_REF="${BASE_REF:-199aa43}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-USAGE='{"five_hour":{"utilization":42,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":27,"resets_at":"2030-01-01T00:00:00+00:00"}}'
 norm(){ sed 's/Updated [0-9][0-9]:[0-9][0-9]/Updated XX:XX/g'; }
 base="$(mktemp)"; git -C "$REPO" show "$BASE_REF:claudebar" > "$base" && chmod +x "$base"
-SCRIPT="$base" run_claudebar "$USAGE"; b="$(norm <<<"$OUT")"
-run_claudebar "$USAGE";                 n="$(norm <<<"$OUT")"
+
+# fixtures
+MIN='{"five_hour":{"utilization":42,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":27,"resets_at":"2030-01-01T00:00:00+00:00"}}'
+SON='{"five_hour":{"utilization":42,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":27,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day_sonnet":{"utilization":15,"resets_at":"2030-01-01T00:00:00+00:00"}}'
+EXTRA='{"five_hour":{"utilization":42,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":27,"resets_at":"2030-01-01T00:00:00+00:00"},"extra_usage":{"is_enabled":true,"used_credits":250,"monthly_limit":5000}}'
+BAD='{"five_hour":{"utilization":"x"},"seven_day":{"utilization":null}}'
+
+cmp_same() {  # <name> <usage> [flags...]
+    local name="$1" usage="$2"; shift 2
+    SCRIPT="$base" run_claudebar "$usage" "$@"; local b; b="$(norm <<<"$OUT")"
+    run_claudebar "$usage" "$@";               local n; n="$(norm <<<"$OUT")"
+    [[ "$b" == "$n" ]] && _ok "$name" || _no "$name" "$(diff <(printf '%s' "$b") <(printf '%s' "$n") | head -40)"
+}
+
+for fx_name in MIN SON EXTRA BAD; do
+    fx="${!fx_name}"
+    cmp_same "baseline $fx_name default"          "$fx"
+    cmp_same "baseline $fx_name --tooltip-pace-pts" "$fx" --tooltip-pace-pts
+    cmp_same "baseline $fx_name custom --format"   "$fx" --format '{session_pct}% w{weekly_pct}%'
+    cmp_same "baseline $fx_name custom --tooltip-format" "$fx" --tooltip-format '{session_bar} {weekly_bar}'
+done
+
 rm -f "$base"
-[[ "$b" == "$n" ]] && _ok "no-flag output unchanged vs $BASE_REF" || _no "no-flag output unchanged vs $BASE_REF" "$(diff <(printf '%s' "$b") <(printf '%s' "$n") | head -40)"
 finish
