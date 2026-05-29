@@ -4,36 +4,42 @@
 # with colored progress bars and Pango markup tooltip.
 #
 # Usage: claudebar [--icon ICON] [--format FORMAT] [--tooltip-format FORMAT] [--pace-tolerance N]
-#                  [--format-pace-color] [--tooltip-pace-pts]
+#                  [--format-pace-color] [--tooltip-pace-pts] [--remaining]
 #                  [--color-low HEX] [--color-mid HEX] [--color-high HEX] [--color-critical HEX]
 #
 # Format placeholders:
 #   {icon}              󰚩 icon (Nerd Font)
 #   {plan}              Plan label (e.g. "Max 5x")
-#   {session_pct}       Session (5h) usage %
-#   {session_reset}     Session countdown (e.g. "1h 30m")
-#   {session_elapsed}   Session time elapsed % (e.g. "58")
-#   {session_bar}       Session usage progress bar (Pango-colored)
+#   {session_pct}           Session (5h) usage %
+#   {session_remaining_pct} Session remaining % (100 − used, clamped 0..100)
+#   {session_reset}         Session countdown (e.g. "1h 30m")
+#   {session_elapsed}       Session time elapsed % (e.g. "58")
+#   {session_bar}           Session usage progress bar (Pango-colored)
+#   {session_remaining_bar} Session remaining drain bar (Pango-colored, no marker)
 #   {session_pace}           Session pacing icon, ratio-based (↑ ↓ →)
 #   {session_pace_indicator} Session pacing icon, point-based (↑ ↓ →)
 #   {session_pace_pct}       Session pacing deviation, ratio (e.g. "72% ahead")
 #   {session_pace_pts}       Session pacing deviation, points (e.g. "12pts ahead")
 #   {session_pace_delta}     Session pacing delta, signed (e.g. "-12", "5", "0")
 #   {session_pace_abs_delta} Session pacing delta, unsigned (e.g. "12", "5", "0")
-#   {weekly_pct}        Weekly (7d all models) usage %
-#   {weekly_reset}      Weekly countdown (e.g. "4d 1h")
-#   {weekly_elapsed}    Weekly time elapsed % (e.g. "42")
-#   {weekly_bar}        Weekly usage progress bar (Pango-colored)
+#   {weekly_pct}            Weekly (7d all models) usage %
+#   {weekly_remaining_pct}  Weekly remaining % (100 − used, clamped 0..100)
+#   {weekly_reset}          Weekly countdown (e.g. "4d 1h")
+#   {weekly_elapsed}        Weekly time elapsed % (e.g. "42")
+#   {weekly_bar}            Weekly usage progress bar (Pango-colored)
+#   {weekly_remaining_bar}  Weekly remaining drain bar (Pango-colored, no marker)
 #   {weekly_pace}            Weekly pacing icon, ratio-based (↑ ↓ →)
 #   {weekly_pace_indicator}  Weekly pacing icon, point-based (↑ ↓ →)
 #   {weekly_pace_pct}        Weekly pacing deviation, ratio (e.g. "72% ahead")
 #   {weekly_pace_pts}        Weekly pacing deviation, points (e.g. "12pts ahead")
 #   {weekly_pace_delta}      Weekly pacing delta, signed (e.g. "-12", "5", "0")
 #   {weekly_pace_abs_delta}  Weekly pacing delta, unsigned (e.g. "12", "5", "0")
-#   {sonnet_pct}        Sonnet-only weekly usage %
-#   {sonnet_reset}      Sonnet countdown
-#   {sonnet_elapsed}    Sonnet time elapsed % (e.g. "42")
-#   {sonnet_bar}        Sonnet usage progress bar (Pango-colored)
+#   {sonnet_pct}            Sonnet-only weekly usage %
+#   {sonnet_remaining_pct}  Sonnet remaining % (100 − used, clamped 0..100)
+#   {sonnet_reset}          Sonnet countdown
+#   {sonnet_elapsed}        Sonnet time elapsed % (e.g. "42")
+#   {sonnet_bar}            Sonnet usage progress bar (Pango-colored)
+#   {sonnet_remaining_bar}  Sonnet remaining drain bar (Pango-colored, no marker)
 #   {sonnet_pace}            Sonnet pacing icon, ratio-based (↑ ↓ →)
 #   {sonnet_pace_indicator}  Sonnet pacing icon, point-based (↑ ↓ →)
 #   {sonnet_pace_pct}        Sonnet pacing deviation, ratio (e.g. "72% ahead")
@@ -46,6 +52,9 @@
 #   {extra_bar}         Extra usage progress bar (Pango-colored)
 #
 # Default format: "{session_pct}% · {session_reset}"
+# --remaining flips the default bar text + tooltip to a "what's left" framing
+#   (e.g. "58% left · 1h 30m"); {*_remaining_pct} and {*_remaining_bar} are
+#   available regardless of this flag. Fully backward compatible; opt-in.
 # Note: bar placeholders are colored by their own window's usage, independent of
 #       the surrounding bar text color (which reflects the worst window).
 

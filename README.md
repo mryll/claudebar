@@ -204,9 +204,11 @@ Example Waybar config with custom format:
 | `{icon}` | Claude icon (Nerd Font) | `󰚩` |
 | `{plan}` | Plan label | Max 5x |
 | `{session_pct}` | Session (5h) usage % | 42 |
+| `{session_remaining_pct}` | Session remaining % (100 − used) | 58 |
 | `{session_reset}` | Session countdown | 1h 30m |
 | `{session_elapsed}` | Session time elapsed % | 58 |
 | `{session_bar}` | Session usage progress bar (Pango) | `████████░░░░░░░░░░░░` |
+| `{session_remaining_bar}` | Session remaining drain bar (Pango) | `████████████░░░░░░░░` |
 | `{session_pace}` | Session pacing icon (ratio-based) | ↑ / ↓ / → |
 | `{session_pace_indicator}` | Session pacing icon (point-based) | ↑ / ↓ / → |
 | `{session_pace_pct}` | Session pacing deviation (ratio) | 12% ahead |
@@ -214,9 +216,11 @@ Example Waybar config with custom format:
 | `{session_pace_delta}` | Session pacing delta (signed) | -12 |
 | `{session_pace_abs_delta}` | Session pacing delta (unsigned) | 12 |
 | `{weekly_pct}` | Weekly (7d all models) usage % | 27 |
+| `{weekly_remaining_pct}` | Weekly remaining % (100 − used) | 73 |
 | `{weekly_reset}` | Weekly countdown | 4d 1h |
 | `{weekly_elapsed}` | Weekly time elapsed % | 42 |
 | `{weekly_bar}` | Weekly usage progress bar (Pango) | `█████░░░░░░░░░░░░░░░` |
+| `{weekly_remaining_bar}` | Weekly remaining drain bar (Pango) | `███████████████░░░░░` |
 | `{weekly_pace}` | Weekly pacing icon (ratio-based) | ↑ / ↓ / → |
 | `{weekly_pace_indicator}` | Weekly pacing icon (point-based) | ↑ / ↓ / → |
 | `{weekly_pace_pct}` | Weekly pacing deviation (ratio) | 5% under |
@@ -224,9 +228,11 @@ Example Waybar config with custom format:
 | `{weekly_pace_delta}` | Weekly pacing delta (signed) | -8 |
 | `{weekly_pace_abs_delta}` | Weekly pacing delta (unsigned) | 8 |
 | `{sonnet_pct}` | Sonnet-only weekly usage % | 4 |
+| `{sonnet_remaining_pct}` | Sonnet remaining % (100 − used) | 96 |
 | `{sonnet_reset}` | Sonnet countdown | 2h 24m |
 | `{sonnet_elapsed}` | Sonnet time elapsed % | 42 |
 | `{sonnet_bar}` | Sonnet usage progress bar (Pango) | `░░░░░░░░░░░░░░░░░░░░` |
+| `{sonnet_remaining_bar}` | Sonnet remaining drain bar (Pango) | `████████████████████` |
 | `{sonnet_pace}` | Sonnet pacing icon (ratio-based) | ↑ / ↓ / → |
 | `{sonnet_pace_indicator}` | Sonnet pacing icon (point-based) | ↑ / ↓ / → |
 | `{sonnet_pace_pct}` | Sonnet pacing deviation (ratio) | 3% ahead |
@@ -240,6 +246,24 @@ Example Waybar config with custom format:
 
 > [!NOTE]
 > Bar placeholders are colored by their own window's usage thresholds (low/mid/high/critical), independently of the surrounding bar text color, which reflects the worst window overall. A `{session_bar}` can render green while the surrounding text is red because weekly or sonnet hit the critical threshold.
+
+### Remaining mode
+
+Use `--remaining` to flip the default bar text and tooltip to a "what's left" (battery) framing:
+
+```bash
+# Default (usage framing)
+claudebar
+# => 42% · 1h 30m
+
+# Remaining framing
+claudebar --remaining
+# => 58% left · 1h 30m
+```
+
+The tooltip header gains a `· Remaining` suffix, and the default bar text becomes `{session_remaining_pct}% left · {session_reset}`. This flag is opt-in and fully backward compatible — it only changes the default format and tooltip header; custom `--format` / `--tooltip-format` values are unaffected.
+
+The `{*_remaining_pct}` and `{*_remaining_bar}` placeholders are available regardless of this flag and can be used in any custom format.
 
 ### Pacing indicators
 

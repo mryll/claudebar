@@ -3,7 +3,7 @@
 ## Tooling
 
 - Install: `make install PREFIX=~/.local` (or `sudo make install`)
-- No build step, linter, or test suite — this is a single bash script (`claudebar`)
+- No build step or linter; tests live in `tests/` (run `bash tests/test_*.sh`)
 
 ## Non-Obvious Rules
 
