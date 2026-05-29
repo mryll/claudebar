@@ -60,7 +60,7 @@ run_claudebar "$EX" --remaining
 assert_exit0 "extra under --remaining: exit 0"; assert_json_valid "extra under --remaining: valid JSON"
 assert_tip_has "extra still shows dollar limit" "Limit:"
 
-# --remaining --tooltip-pace-pts -> battery bars WITH marker (marker glyph present)
+# smoke test: --remaining with battery bars + marker renders without crashing (exit 0 + valid JSON)
 run_claudebar "$FIX" --remaining --tooltip-pace-pts
 assert_exit0 "--remaining pace-pts: exit 0"; assert_json_valid "--remaining pace-pts: valid JSON"
 
@@ -83,7 +83,7 @@ for bad in '{"five_hour":{"utilization":1e100},"seven_day":{"utilization":5}}' \
            'not json' \
            '{"five_hour":{"utilization":5}} {"seven_day":{"utilization":5}}'; do
     run_claudebar "$bad" --remaining --tooltip-pace-pts
-    assert_exit0 "never-crash --remaining: exit 0"; assert_json_valid "never-crash --remaining: valid JSON"
+    assert_exit0 "never-crash --remaining [$bad]: exit 0"; assert_json_valid "never-crash --remaining [$bad]: valid JSON"
 done
 
 finish
