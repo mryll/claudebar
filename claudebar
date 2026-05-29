@@ -55,6 +55,8 @@ set -euo pipefail
 FORMAT="{session_pct}% · {session_reset}"
 TOOLTIP_FORMAT=""
 PACE_TOLERANCE=5
+REMAINING=false
+FORMAT_SET=false
 BAR_COLOR_LOW=""
 BAR_COLOR_MID=""
 BAR_COLOR_HIGH=""
@@ -69,7 +71,7 @@ while [[ $# -gt 0 ]]; do
             BAR_ICON="$2"; shift 2 ;;
         --format)
             [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--format requires a value","class":"critical"}'; exit 0; }
-            FORMAT="$2"; shift 2 ;;
+            FORMAT="$2"; FORMAT_SET=true; shift 2 ;;
         --tooltip-format)
             [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--tooltip-format requires a value","class":"critical"}'; exit 0; }
             TOOLTIP_FORMAT="$2"; shift 2 ;;
@@ -78,6 +80,7 @@ while [[ $# -gt 0 ]]; do
             PACE_TOLERANCE="$2"; shift 2 ;;
         --format-pace-color) FORMAT_PACE_COLOR=true; shift ;;
         --tooltip-pace-pts) TOOLTIP_PACE_PTS=true; shift ;;
+        --remaining) REMAINING=true; shift ;;
         --color-low)       [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--color-low requires a value","class":"critical"}'; exit 0; }
                            BAR_COLOR_LOW="$2"; shift 2 ;;
         --color-mid)       [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--color-mid requires a value","class":"critical"}'; exit 0; }
@@ -91,6 +94,8 @@ while [[ $# -gt 0 ]]; do
 done
 [[ "$PACE_TOLERANCE" =~ ^[0-9]+$ ]] || { echo '{"text":"⚠","tooltip":"--pace-tolerance must be a non-negative integer","class":"critical"}'; exit 0; }
 PACE_TOLERANCE=$((10#$PACE_TOLERANCE))
+# In remaining mode, default the bar to "what's left" unless the user set their own format.
+[[ "$REMAINING" == "true" && "$FORMAT_SET" == "false" ]] && FORMAT="{session_remaining_pct}% · {session_reset}"
 
 CREDS="$HOME/.claude/.credentials.json"
 API_URL="https://api.anthropic.com/api/oauth/usage"

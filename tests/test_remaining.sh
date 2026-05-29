@@ -24,4 +24,16 @@ assert_text_has "remaining_bar renders blocks" "█"
 run_claudebar '{"five_hour":{"utilization":40,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":10,"resets_at":"2030-01-01T00:00:00+00:00"}}' --format '{sonnet_remaining_bar}'
 assert_exit0 "sonnet_remaining_bar no-sonnet: exit 0"; assert_json_valid "sonnet_remaining_bar: valid JSON"
 
+FIX='{"five_hour":{"utilization":40,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":10,"resets_at":"2030-01-01T00:00:00+00:00"}}'
+
+# --remaining flips the DEFAULT bar text to remaining% (40 used -> 60 left)
+run_claudebar "$FIX" --remaining
+assert_exit0 "--remaining default: exit 0"; assert_text_has "--remaining shows 60%" "60%"
+
+# --format X --remaining keeps X (parser-state guard, both orders)
+run_claudebar "$FIX" --format '{session_pct}%' --remaining
+assert_text_has "--format then --remaining keeps usage 40%" "40%"
+run_claudebar "$FIX" --remaining --format '{session_pct}%'
+assert_text_has "--remaining then --format keeps usage 40%" "40%"
+
 finish
