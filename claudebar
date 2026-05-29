@@ -509,6 +509,15 @@ parse_reset() {
     jq -r "try (.$1.resets_at // empty) catch empty" <<< "$usage"
 }
 
+# Remaining percent for a window: 100 - used, clamped 0..100. Clamps ONLY its own
+# output — never mutates the source used pct (that would change no-flag output).
+remaining_pct_for() {
+    local r=$(( 100 - $1 ))
+    (( r < 0 )) && r=0
+    (( r > 100 )) && r=100
+    echo "$r"
+}
+
 session_pct=$(parse_pct five_hour)
 session_reset=$(parse_reset five_hour)
 weekly_pct=$(parse_pct seven_day)
@@ -521,6 +530,10 @@ if [[ "$has_sonnet" == "true" ]]; then
     sonnet_pct=$(parse_pct seven_day_sonnet)
     sonnet_reset=$(parse_reset seven_day_sonnet)
 fi
+
+session_remaining_pct=$(remaining_pct_for "$session_pct")
+weekly_remaining_pct=$(remaining_pct_for "$weekly_pct")
+sonnet_remaining_pct=$(remaining_pct_for "$sonnet_pct")
 
 # --- Extra usage ---
 has_extra=$(jq 'try (.extra_usage != null) catch false' <<< "$usage")
@@ -639,6 +652,9 @@ apply_format() {
     text="${text//\{weekly_reset\}/$w_cd_val}"
     text="${text//\{weekly_elapsed\}/$weekly_elapsed}"
     text="${text//\{sonnet_pct\}/$sonnet_pct}"
+    text="${text//\{session_remaining_pct\}/$session_remaining_pct}"
+    text="${text//\{weekly_remaining_pct\}/$weekly_remaining_pct}"
+    text="${text//\{sonnet_remaining_pct\}/$sonnet_remaining_pct}"
     text="${text//\{sonnet_reset\}/$sn_cd_val}"
     text="${text//\{sonnet_elapsed\}/$sonnet_elapsed}"
     text="${text//\{extra_spent\}/$extra_spent}"
