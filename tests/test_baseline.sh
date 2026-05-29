@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034  # fixtures referenced indirectly via ${!fx_name}
 # Backward-compat guard: NO behavior change for existing usage. Compares the current
 # script vs the immediate pre-remaining commit, same instant (tooltip embeds wall-clock
 # time), over a matrix of fixtures × existing flags — all WITHOUT --remaining.
@@ -6,7 +7,9 @@ source "$(dirname "$0")/lib.sh"
 BASE_REF="${BASE_REF:-199aa43}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 norm(){ sed 's/Updated [0-9][0-9]:[0-9][0-9]/Updated XX:XX/g'; }
-base="$(mktemp)"; git -C "$REPO" show "$BASE_REF:claudebar" > "$base" && chmod +x "$base"
+base="$(mktemp)"
+git -C "$REPO" show "$BASE_REF:claudebar" > "$base" || { echo "FATAL: cannot extract $BASE_REF:claudebar" >&2; rm -f "$base"; exit 1; }
+chmod +x "$base"
 
 # fixtures
 MIN='{"five_hour":{"utilization":42,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":27,"resets_at":"2030-01-01T00:00:00+00:00"}}'
