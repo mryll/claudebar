@@ -55,7 +55,7 @@
 #
 # Default format: "{session_pct}% · {session_reset}"
 # --remaining flips the default bar text + tooltip to a "what's left" framing
-#   (e.g. "58% left · 1h 30m"); {*_remaining_pct} and {*_remaining_bar} are
+#   (e.g. "58% · 1h 30m"); {*_remaining_pct} and {*_remaining_bar} are
 #   available regardless of this flag. Fully backward compatible; opt-in.
 # Note: bar placeholders are colored by their own window's usage, independent of
 #       the surrounding bar text color (which reflects the worst window).

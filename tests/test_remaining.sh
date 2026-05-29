@@ -5,11 +5,11 @@ source "$(dirname "$0")/lib.sh"
 # --- Unit: remaining_pct_for clamps 0..100 (sourced indirectly via the script's behavior) ---
 # 100 - used, clamped. Verified through the {session_remaining_pct} placeholder below;
 # here we assert the boundary directly using --format.
-run_claudebar '{"five_hour":{"utilization":40,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":10,"resets_at":"2030-01-01T00:00:00+00:00"}}' --format '{session_remaining_pct}'
-assert_exit0 "remaining_pct basic: exit 0"; assert_text_has "remaining_pct 40->60" "60"
+run_claudebar '{"five_hour":{"utilization":40,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":10,"resets_at":"2030-01-01T00:00:00+00:00"}}' --format 'rem={session_remaining_pct}'
+assert_exit0 "remaining_pct basic: exit 0"; assert_text_has "remaining_pct 40->60" "rem=60"
 
-run_claudebar '{"five_hour":{"utilization":150,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":10,"resets_at":"2030-01-01T00:00:00+00:00"}}' --format '{session_remaining_pct}'
-assert_exit0 "remaining_pct >100 clamp: exit 0"; assert_text_has "remaining_pct 150->0" "0"
+run_claudebar '{"five_hour":{"utilization":150,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":10,"resets_at":"2030-01-01T00:00:00+00:00"}}' --format 'rem={session_remaining_pct}'
+assert_exit0 "remaining_pct >100 clamp: exit 0"; assert_text_has "remaining_pct 150->0" "rem=0"
 
 # boundaries: 0 used -> 100 remaining; 100 used -> 0 remaining (also exercises weekly)
 run_claudebar '{"five_hour":{"utilization":0,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":100,"resets_at":"2030-01-01T00:00:00+00:00"}}' --format 's{session_remaining_pct} w{weekly_remaining_pct}'

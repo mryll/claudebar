@@ -258,10 +258,10 @@ claudebar
 
 # Remaining framing
 claudebar --remaining
-# => 58% left · 1h 30m
+# => 58% · 1h 30m
 ```
 
-The tooltip header gains a `· Remaining` suffix, and the default bar text becomes `{session_remaining_pct}% left · {session_reset}`. This flag is opt-in and fully backward compatible — it only changes the default format and tooltip header; custom `--format` / `--tooltip-format` values are unaffected.
+The tooltip header gains a `· Remaining` suffix, and the default bar text becomes `{session_remaining_pct}% · {session_reset}`. This flag is opt-in and fully backward compatible — it only changes the default format and tooltip header; custom `--format` / `--tooltip-format` values are unaffected.
 
 The `{*_remaining_pct}` and `{*_remaining_bar}` placeholders are available regardless of this flag and can be used in any custom format.
 
