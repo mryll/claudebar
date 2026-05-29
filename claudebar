@@ -664,6 +664,9 @@ apply_format() {
     text="${text//\{weekly_bar\}/$format_weekly_bar}"
     text="${text//\{sonnet_bar\}/$format_sonnet_bar}"
     text="${text//\{extra_bar\}/$format_extra_bar}"
+    text="${text//\{session_remaining_bar\}/$format_session_remaining_bar}"
+    text="${text//\{weekly_remaining_bar\}/$format_weekly_remaining_bar}"
+    text="${text//\{sonnet_remaining_bar\}/$format_sonnet_remaining_bar}"
 
     # Pace placeholders — pre-computed colored or plain depending on --format-pace-color.
     text="${text//\{session_pace_indicator\}/$_sp_session_indicator}"
@@ -704,6 +707,9 @@ format_session_bar=$(make_bar "$session_pct" "$session_color")
 format_weekly_bar=$(make_bar "$weekly_pct" "$weekly_color")
 format_sonnet_bar=$(make_bar "$sonnet_pct" "$sonnet_color")
 format_extra_bar=$(make_bar "$extra_pct" "$extra_color")
+format_session_remaining_bar=$(make_bar "$session_remaining_pct" "$session_color")
+format_weekly_remaining_bar=$(make_bar "$weekly_remaining_pct" "$weekly_color")
+format_sonnet_remaining_bar=$(make_bar "$sonnet_remaining_pct" "$sonnet_color")
 
 # Stale data indicator
 stale_icon=""
