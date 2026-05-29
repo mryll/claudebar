@@ -523,6 +523,24 @@ remaining_pct_for() {
     echo "$r"
 }
 
+# Framing helpers: usage by default, "remaining" when --remaining. Centralized so the
+# no-flag path is byte-identical and the rendered bar/number never diverge.
+display_pct() {  # <used_pct>
+    if [[ "$REMAINING" == "true" ]]; then remaining_pct_for "$1"; else echo "$1"; fi
+}
+display_bar() {  # <used_pct> <elapsed> [marker_on]  (marker_on: pass "$TOOLTIP_PACE_PTS")
+    local used=$1 elapsed=$2 marker_on=${3:-}
+    local color; color=$(color_for "$used")
+    if [[ "$REMAINING" == "true" ]]; then
+        local rem; rem=$(remaining_pct_for "$used")
+        if [[ "$marker_on" == "true" ]]; then make_bar "$rem" "$color" "$(( 100 - elapsed ))" "$MARKER"
+        else make_bar "$rem" "$color"; fi
+    else
+        if [[ "$marker_on" == "true" ]]; then make_bar "$used" "$color" "$elapsed" "$MARKER"
+        else make_bar "$used" "$color"; fi
+    fi
+}
+
 session_pct=$(parse_pct five_hour)
 session_reset=$(parse_reset five_hour)
 weekly_pct=$(parse_pct seven_day)
@@ -743,13 +761,8 @@ if [[ -n "$TOOLTIP_FORMAT" ]]; then
     t=$(apply_format "$TOOLTIP_FORMAT")
 else
     # Default rich Pango tooltip — tooltip-specific bars may carry an elapsed marker.
-    if [[ "$TOOLTIP_PACE_PTS" == "true" ]]; then
-        tip_session_bar=$(make_bar "$session_pct" "$session_color" "$session_elapsed" "$MARKER")
-        tip_weekly_bar=$(make_bar "$weekly_pct" "$weekly_color" "$weekly_elapsed" "$MARKER")
-    else
-        tip_session_bar="$format_session_bar"
-        tip_weekly_bar="$format_weekly_bar"
-    fi
+    tip_session_bar=$(display_bar "$session_pct" "$session_elapsed" "$TOOLTIP_PACE_PTS")
+    tip_weekly_bar=$(display_bar "$weekly_pct" "$weekly_elapsed" "$TOOLTIP_PACE_PTS")
     s_cd="$s_cd_val"
     w_cd="$w_cd_val"
 
@@ -761,27 +774,25 @@ else
 
     # Collect all content lines into an array
     lines=()
-    lines+=("CENTER<span font_weight='bold' foreground='${BLUE}'>Claude ${plan}</span>")
+    _tip_title="Claude ${plan}"
+    [[ "$REMAINING" == "true" ]] && _tip_title="${_tip_title} · Remaining"
+    lines+=("CENTER<span font_weight='bold' foreground='${BLUE}'>${_tip_title}</span>")
     lines+=("SEP")
     lines+=("")
     lines+=(" <span foreground='${FG}'>  󰔟  Session</span>")
-    lines+=("   ${tip_session_bar}  <span font_weight='bold' foreground='${session_color}'>${session_pct}% ${_tip_session_pace}</span>")
+    lines+=("   ${tip_session_bar}  <span font_weight='bold' foreground='${session_color}'>$(display_pct "$session_pct")% ${_tip_session_pace}</span>")
     lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${s_cd}</span>")
     lines+=("")
     lines+=(" <span foreground='${FG}'>  󰃰  Weekly</span>")
-    lines+=("   ${tip_weekly_bar}  <span font_weight='bold' foreground='${weekly_color}'>${weekly_pct}% ${_tip_weekly_pace}</span>")
+    lines+=("   ${tip_weekly_bar}  <span font_weight='bold' foreground='${weekly_color}'>$(display_pct "$weekly_pct")% ${_tip_weekly_pace}</span>")
     lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${w_cd}</span>")
 
     if [[ "$has_sonnet" == "true" ]]; then
-        if [[ "$TOOLTIP_PACE_PTS" == "true" ]]; then
-            tip_sonnet_bar=$(make_bar "$sonnet_pct" "$sonnet_color" "$sonnet_elapsed" "$MARKER")
-        else
-            tip_sonnet_bar="$format_sonnet_bar"
-        fi
+        tip_sonnet_bar=$(display_bar "$sonnet_pct" "$sonnet_elapsed" "$TOOLTIP_PACE_PTS")
         sn_cd=$(countdown "$sonnet_reset")
         lines+=("")
         lines+=(" <span foreground='${FG}'>  󱤔  Sonnet only</span>")
-        lines+=("   ${tip_sonnet_bar}  <span font_weight='bold' foreground='${sonnet_color}'>${sonnet_pct}%</span>")
+        lines+=("   ${tip_sonnet_bar}  <span font_weight='bold' foreground='${sonnet_color}'>$(display_pct "$sonnet_pct")%</span>")
         lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${sn_cd}</span>")
     fi
 
