@@ -1,0 +1,3 @@
+# Keep the dev test suite in the repo but out of release archives.
+tests/ export-ignore
+.gitattributes export-ignore

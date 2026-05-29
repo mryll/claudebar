@@ -226,6 +226,7 @@ make_bar() {
     local p=$1 color=$2 marker_pos=${3:--1} marker_color=${4:-}
     local filled=$(( p * BAR_LEN / 100 ))
     (( filled > BAR_LEN )) && filled=$BAR_LEN
+    (( filled < 0 )) && filled=0
 
     local f="" e=""
     if (( marker_pos < 0 )); then
@@ -329,8 +330,8 @@ done
 # --- Read credentials (initial — static fields only; mutable fields re-read under lock) ---
 creds=$(<"$CREDS")
 jq -e . <<< "$creds" &>/dev/null || die "Invalid credentials file.\nRun <b>claude</b> to log in."
-sub_type=$(jq -r '.claudeAiOauth.subscriptionType // "unknown"' <<< "$creds")
-rate_tier=$(jq -r '.claudeAiOauth.rateLimitTier // ""' <<< "$creds")
+sub_type=$(jq -r 'try (.claudeAiOauth.subscriptionType // "unknown") catch "unknown"' <<< "$creds")
+rate_tier=$(jq -r 'try (.claudeAiOauth.rateLimitTier // "") catch ""' <<< "$creds")
 
 # --- Cache / lock setup ---
 mkdir -p "$CACHE_DIR"
@@ -409,9 +410,9 @@ flock -w 45 9 || die "Cache lock timeout"
 # Re-read mutable credential fields under the lock.
 creds=$(<"$CREDS")
 jq -e . <<< "$creds" &>/dev/null || die "Invalid credentials file.\nRun <b>claude</b> to log in."
-access_token=$(jq -r '.claudeAiOauth.accessToken // empty' <<< "$creds")
-refresh_token=$(jq -r '.claudeAiOauth.refreshToken // empty' <<< "$creds")
-expires_at=$(jq -r '.claudeAiOauth.expiresAt // 0' <<< "$creds")
+access_token=$(jq -r 'try (.claudeAiOauth.accessToken // empty) catch empty' <<< "$creds")
+refresh_token=$(jq -r 'try (.claudeAiOauth.refreshToken // empty) catch empty' <<< "$creds")
+expires_at=$(jq -r 'try (.claudeAiOauth.expiresAt // 0) catch 0' <<< "$creds")
 expires_at="${expires_at%%.*}" # truncate float (e.g. 5000.0 → 5000)
 [[ "$expires_at" =~ ^[0-9]+$ ]] || expires_at=0
 expires_s=$(( expires_at / 1000 ))
@@ -439,7 +440,7 @@ if (( expires_s < now_s + REFRESH_BUFFER )); then
     if [[ "$refresh_code" == "200" ]] && [[ -n "$resp" ]] && jq -e '.access_token' <<< "$resp" &>/dev/null; then
         access_token=$(jq -r '.access_token' <<< "$resp")
         new_refresh=$(jq -r '.refresh_token // empty' <<< "$resp")
-        expires_in=$(jq -r '.expires_in' <<< "$resp")
+        expires_in=$(jq -r 'try (((.expires_in | numbers) // 0) | floor | if (. > 1e12 or . < 0) then 0 else . end) catch 0' <<< "$resp")
         expires_in="${expires_in%%.*}" # truncate float (e.g. 3600.0 → 3600)
         [[ "$expires_in" =~ ^[0-9]+$ ]] || expires_in=3600
         new_expires_at=$(( $(date +%s) * 1000 + expires_in * 1000 ))
@@ -491,16 +492,21 @@ fi
 _fetch_usage
 exec 9>&-
 
+# A corrupt or partially-written cache could leave $usage as invalid JSON; the
+# per-field try/catch reads can't catch a jq *parse* error, so guard the whole
+# payload here (degrades to a clear warning, still exit 0).
+jq -e -s 'length == 1' <<< "$usage" &>/dev/null || die "Invalid usage data.\nWill refresh next cycle."
+
 # --- Parse windows ---
 # round in jq -> integer literal. A bare float ("13.0") fed to printf '%.0f'
 # is rejected as "invalid number" under comma-decimal locales (es_AR, de_DE, ...),
 # where strtod won't accept the period.
 parse_pct() {
-    jq -r "(.$1.utilization // 0) | round" <<< "$usage"
+    jq -r "try (((.$1.utilization | numbers) // 0) | round | if (. > 1e12 or . < 0) then 0 else . end) catch 0" <<< "$usage"
 }
 
 parse_reset() {
-    jq -r ".$1.resets_at // empty" <<< "$usage"
+    jq -r "try (.$1.resets_at // empty) catch empty" <<< "$usage"
 }
 
 session_pct=$(parse_pct five_hour)
@@ -508,7 +514,7 @@ session_reset=$(parse_reset five_hour)
 weekly_pct=$(parse_pct seven_day)
 weekly_reset=$(parse_reset seven_day)
 
-has_sonnet=$(jq '.seven_day_sonnet != null' <<< "$usage")
+has_sonnet=$(jq 'try (.seven_day_sonnet != null) catch false' <<< "$usage")
 sonnet_pct=0
 sonnet_reset=""
 if [[ "$has_sonnet" == "true" ]]; then
@@ -517,16 +523,16 @@ if [[ "$has_sonnet" == "true" ]]; then
 fi
 
 # --- Extra usage ---
-has_extra=$(jq '.extra_usage != null' <<< "$usage")
+has_extra=$(jq 'try (.extra_usage != null) catch false' <<< "$usage")
 extra_enabled="false"
 extra_spent=""
 extra_limit=""
 extra_pct=0
 if [[ "$has_extra" == "true" ]]; then
-    extra_enabled=$(jq -r '.extra_usage.is_enabled // false' <<< "$usage")
+    extra_enabled=$(jq -r 'try (.extra_usage.is_enabled // false) catch false' <<< "$usage")
     if [[ "$extra_enabled" == "true" ]]; then
-        local_limit=$(jq -r '(.extra_usage.monthly_limit // 0) | floor' <<< "$usage")
-        local_used=$(jq -r '(.extra_usage.used_credits // 0) | floor' <<< "$usage")
+        local_limit=$(jq -r 'try (((.extra_usage.monthly_limit | numbers) // 0) | floor | if (. > 1e12 or . < 0) then 0 else . end) catch 0' <<< "$usage")
+        local_used=$(jq -r 'try (((.extra_usage.used_credits | numbers) // 0) | floor | if (. > 1e12 or . < 0) then 0 else . end) catch 0' <<< "$usage")
         # Convert cents to dollars (integer math: 5000 → "50.00")
         # Use absolute values for formatting to avoid "$-1.-50" with negative remainders
         _fmt_dollars() {
