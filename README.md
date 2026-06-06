@@ -392,6 +392,7 @@ API responses are cached in `~/.cache/claudebar/usage.json` for 60 seconds. This
 - [codexbar](https://github.com/mryll/codexbar) — OpenAI Codex usage widget for Waybar
 - [logibar](https://github.com/mryll/logibar) — Logitech battery widgets for Waybar
 - [meteobar](https://github.com/mryll/meteobar) — Weather widget for Waybar (Open-Meteo)
+- [tickerbar](https://github.com/mryll/tickerbar) — Multi-market price ticker for Waybar (crypto, stocks, forex)
 - [ClaudeBar](https://github.com/andresreibel/ClaudeBar) — Similar widget using TypeScript/Bun
 - [waybar-ai-usage](https://github.com/NihilDigit/waybar-ai-usage) — Claude + Codex monitor (Python, uses browser cookies)
 - [Omarchy](https://github.com/basecamp/omarchy) — Beautiful, modern & opinionated Linux distribution
