@@ -5,7 +5,12 @@
 
 Waybar widget that shows your Claude AI usage limits — session, weekly, and per-model — with colored progress bars and countdown timers.
 
-![screenshot](screenshot.png)
+![claudebar in Waybar](screenshots/bar.png)
+
+<p align="center">
+  <em>A compact line in your bar — hover for the full usage breakdown:</em><br><br>
+  <img src="screenshot.png" alt="claudebar tooltip" width="320">
+</p>
 
 ## Features
 
