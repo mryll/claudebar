@@ -145,9 +145,9 @@ Tooltip and bar text colors are automatically read from the active [Omarchy](htt
 
 The priority chain is: **CLI flags** (`--color-*`) > **Omarchy theme** > **One Dark defaults**.
 
-| Tokyo Night | Gruvbox | Catppuccin Latte |
+| Gruvbox | Catppuccin Latte | Everforest |
 |:---:|:---:|:---:|
-| ![Tokyo Night](screenshots/tokyo-night.png) | ![Gruvbox](screenshots/gruvbox.png) | ![Catppuccin Latte](screenshots/catppuccin-latte.png) |
+| ![Gruvbox](screenshots/gruvbox.png) | ![Catppuccin Latte](screenshots/catppuccin-latte.png) | ![Everforest](screenshots/everforest.png) |
 
 ### Format customization
 
