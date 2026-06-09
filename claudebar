@@ -156,7 +156,7 @@ load_theme_colors() {
         if [[ -n "$foreground" && -n "$background" ]]; then
             DIM=$(hex_blend "$foreground" "$background")
         fi
-        MARKER="$DIM"
+        MARKER="$FG"
         # BAR_EMPTY = slightly lighter than background (blend bg with dim)
         if [[ -n "$background" ]]; then
             BAR_EMPTY=$(hex_blend "$background" "$DIM")
@@ -173,7 +173,7 @@ BLUE="#61afef"
 DIM="#5c6370"
 FG="#abb2bf"
 BAR_EMPTY="#3e4451"
-MARKER="#d19a66"
+MARKER="$FG"
 load_theme_colors
 
 # Bar text colors: CLI overrides > theme > One Dark defaults
@@ -236,7 +236,7 @@ pace_color_for() {
 
 # Build a progress bar with optional elapsed marker.
 # Usage: make_bar <pct> <color> [marker_pct] [marker_color]
-# When marker is provided, a █ in marker_color is placed at the elapsed
+# When marker is provided, a ┃ (gate) in marker_color is placed at the elapsed
 # position, showing where you'd be if pacing evenly across the window.
 make_bar() {
     local p=$1 color=$2 marker_pos=${3:--1} marker_color=${4:-}
@@ -260,7 +260,7 @@ make_bar() {
     printf -v f '%*s' "$pre_f" ''; printf -v e '%*s' "$(( m - pre_f ))" ''
     printf "<span foreground='%s'>%s</span><span foreground='%s'>%s</span>" \
         "$color" "${f// /█}" "$BAR_EMPTY" "${e// /░}"
-    printf "<span foreground='%s'>█</span>" "$marker_color"
+    printf "<span foreground='%s'>┃</span>" "$marker_color"
     printf -v f '%*s' "$post_f" ''; printf -v e '%*s' "$(( BAR_LEN - m - 1 - post_f ))" ''
     printf "<span foreground='%s'>%s</span><span foreground='%s'>%s</span>" \
         "$color" "${f// /█}" "$BAR_EMPTY" "${e// /░}"
@@ -626,9 +626,11 @@ fi
 if [[ "$TOOLTIP_PACE_PTS" == "true" ]]; then
     _tip_session_pace="$session_pace_indicator"
     _tip_weekly_pace="$weekly_pace_indicator"
+    _tip_sonnet_pace="$sonnet_pace_indicator"
 else
     _tip_session_pace="$session_pace"
     _tip_weekly_pace="$weekly_pace"
+    _tip_sonnet_pace="$sonnet_pace"
 fi
 
 # --- Pace colors ---
@@ -783,6 +785,9 @@ else
 
     strip_tags() { sed 's/<[^>]*>//g' <<< "$1"; }
 
+    # Right-align a plain value label to a fixed column (width 6 fits "100% ↑").
+    _val_pad() { local w=6 n=${#1}; (( n > w )) && w=$n; printf '%*s' $(( w - n )) ''; }
+
     # Collect all content lines into an array
     lines=()
     _tip_title="Claude ${plan}"
@@ -791,27 +796,30 @@ else
     lines+=("SEP")
     lines+=("")
     lines+=(" <span foreground='${FG}'>  󰔟  Session</span>")
-    lines+=("   ${tip_session_bar}  <span font_weight='bold' foreground='${session_color}'>$(display_pct "$session_pct")% ${_tip_session_pace}</span>")
-    lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${s_cd}</span>")
+    _lbl_s="$(display_pct "$session_pct")% ${_tip_session_pace}"
+    lines+=("   ${tip_session_bar}  $(_val_pad "$_lbl_s")<span font_weight='bold' foreground='${session_color}'>${_lbl_s}</span>")
+    lines+=(" <span foreground='${DIM}'>  󰥔  Resets in ${s_cd}</span>")
     lines+=("")
     lines+=(" <span foreground='${FG}'>  󰃰  Weekly</span>")
-    lines+=("   ${tip_weekly_bar}  <span font_weight='bold' foreground='${weekly_color}'>$(display_pct "$weekly_pct")% ${_tip_weekly_pace}</span>")
-    lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${w_cd}</span>")
+    _lbl_w="$(display_pct "$weekly_pct")% ${_tip_weekly_pace}"
+    lines+=("   ${tip_weekly_bar}  $(_val_pad "$_lbl_w")<span font_weight='bold' foreground='${weekly_color}'>${_lbl_w}</span>")
+    lines+=(" <span foreground='${DIM}'>  󰥔  Resets in ${w_cd}</span>")
 
     if [[ "$has_sonnet" == "true" ]]; then
         tip_sonnet_bar=$(display_bar "$sonnet_pct" "$sonnet_elapsed" "$TOOLTIP_PACE_PTS")
         sn_cd=$(countdown "$sonnet_reset")
         lines+=("")
         lines+=(" <span foreground='${FG}'>  󱤔  Sonnet only</span>")
-        lines+=("   ${tip_sonnet_bar}  <span font_weight='bold' foreground='${sonnet_color}'>$(display_pct "$sonnet_pct")%</span>")
-        lines+=(" <span foreground='${DIM}'>  ⏱  Resets in ${sn_cd}</span>")
+        _lbl_n="$(display_pct "$sonnet_pct")% ${_tip_sonnet_pace}"
+        lines+=("   ${tip_sonnet_bar}  $(_val_pad "$_lbl_n")<span font_weight='bold' foreground='${sonnet_color}'>${_lbl_n}</span>")
+        lines+=(" <span foreground='${DIM}'>  󰥔  Resets in ${sn_cd}</span>")
     fi
 
     if [[ "$extra_enabled" == "true" ]]; then
         lines+=("")
         lines+=("SEP")
         lines+=(" <span foreground='${FG}'>  󰄑  Extra usage</span>")
-        lines+=("   ${format_extra_bar}  <span font_weight='bold' foreground='${extra_color}'>${extra_spent}</span>")
+        lines+=("   ${format_extra_bar}  $(_val_pad "${extra_spent}")<span font_weight='bold' foreground='${extra_color}'>${extra_spent}</span>")
         lines+=(" <span foreground='${DIM}'>  󰀓  Limit: ${extra_limit}</span>")
     fi
 
