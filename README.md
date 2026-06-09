@@ -360,7 +360,11 @@ By default the tooltip is **plain** (no border) and renders in your Waybar font,
 claudebar --frame
 ```
 
-Framed mode pins `JetBrainsMono Nerd Font Mono` so the box, bars and icons stay aligned regardless of your bar font — install a Nerd Font Mono (e.g. `ttf-jetbrains-mono-nerd`) for it to render correctly.
+Framed mode pins `JetBrainsMono Nerd Font Mono` **by default** so the box, bars and icons stay aligned regardless of your bar font. Don't have it (or prefer another)? Point `--frame-font` at any complete Mono Nerd Font you already have:
+
+```bash
+claudebar --frame --frame-font "FiraCode Nerd Font Mono"
+```
 
 ### Spacing
 

@@ -76,6 +76,7 @@ BAR_ICON=""
 FORMAT_PACE_COLOR=false
 TOOLTIP_PACE_PTS=false
 FRAME=false
+FRAME_FONT="JetBrainsMono Nerd Font Mono"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --icon)
@@ -94,6 +95,8 @@ while [[ $# -gt 0 ]]; do
         --tooltip-pace-pts) TOOLTIP_PACE_PTS=true; shift ;;
         --remaining) REMAINING=true; shift ;;
         --frame) FRAME=true; shift ;;
+        --frame-font) [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--frame-font requires a value","class":"critical"}'; exit 0; }
+                      FRAME_FONT="$2"; shift 2 ;;
         --color-low)       [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--color-low requires a value","class":"critical"}'; exit 0; }
                            BAR_COLOR_LOW="$2"; shift 2 ;;
         --color-mid)       [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--color-mid requires a value","class":"critical"}'; exit 0; }
@@ -926,7 +929,8 @@ else
             fi
         done
         t+="${B}╰${border_h}╯${E}"
-        t="<span font_family='JetBrainsMono Nerd Font Mono'>${t}</span>"
+        _ff=$(sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/'\''/\&apos;/g' <<< "$FRAME_FONT")
+        t="<span font_family='${_ff}'>${t}</span>"
     else
         # Plain (default): no border, no font pin → renders in the user's font.
         # Nothing is aligned to a right edge, so a non-Nerd font never misaligns.
