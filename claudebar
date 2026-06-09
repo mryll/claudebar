@@ -75,6 +75,7 @@ BAR_COLOR_CRITICAL=""
 BAR_ICON=""
 FORMAT_PACE_COLOR=false
 TOOLTIP_PACE_PTS=false
+FRAME=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --icon)
@@ -92,6 +93,7 @@ while [[ $# -gt 0 ]]; do
         --format-pace-color) FORMAT_PACE_COLOR=true; shift ;;
         --tooltip-pace-pts) TOOLTIP_PACE_PTS=true; shift ;;
         --remaining) REMAINING=true; shift ;;
+        --frame) FRAME=true; shift ;;
         --color-low)       [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--color-low requires a value","class":"critical"}'; exit 0; }
                            BAR_COLOR_LOW="$2"; shift 2 ;;
         --color-mid)       [[ $# -ge 2 ]] || { echo '{"text":"⚠","tooltip":"--color-mid requires a value","class":"critical"}'; exit 0; }
@@ -908,18 +910,39 @@ else
     printf -v border_h '%*s' "$INNER_W" ''; border_h="${border_h// /─}"
 
     # Render tooltip
-    t=""
-    t+="${B}╭${border_h}╮${E}${NL}"
-    for line in "${lines[@]}"; do
-        if [[ "$line" == "SEP" ]]; then
-            t+="$(L "$sep")${NL}"
-        elif [[ "$line" == CENTER* ]]; then
-            t+="$(LC "${line#CENTER}")${NL}"
-        else
-            t+="$(L "$line")${NL}"
-        fi
-    done
-    t+="${B}╰${border_h}╯${E}"
+    if [[ "$FRAME" == "true" ]]; then
+        # Framed: draw the box, then pin the whole tooltip to a complete Mono Nerd
+        # Font so text, box-drawing and icons share one uniform advance — alignment
+        # holds regardless of the user's bar font (needs JetBrainsMono Nerd Font Mono).
+        t=""
+        t+="${B}╭${border_h}╮${E}${NL}"
+        for line in "${lines[@]}"; do
+            if [[ "$line" == "SEP" ]]; then
+                t+="$(L "$sep")${NL}"
+            elif [[ "$line" == CENTER* ]]; then
+                t+="$(LC "${line#CENTER}")${NL}"
+            else
+                t+="$(L "$line")${NL}"
+            fi
+        done
+        t+="${B}╰${border_h}╯${E}"
+        t="<span font_family='JetBrainsMono Nerd Font Mono'>${t}</span>"
+    else
+        # Plain (default): no border, no font pin → renders in the user's font.
+        # Nothing is aligned to a right edge, so a non-Nerd font never misaligns.
+        t=""
+        for line in "${lines[@]}"; do
+            if [[ "$line" == "SEP" ]]; then
+                t+="${sep}${NL}"
+            elif [[ "$line" == CENTER* ]]; then
+                # Leading space aligns the title with the rule and section headers.
+                t+=" ${line#CENTER}${NL}"
+            else
+                t+="${line}${NL}"
+            fi
+        done
+        t="${t%"$NL"}"
+    fi
 fi
 
 # --- Output waybar JSON ---

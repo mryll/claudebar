@@ -35,7 +35,7 @@ Waybar widget that shows your Claude AI usage limits — session, weekly, and pe
 - Claude Pro or Max subscription
 - `curl`, `jq`, GNU `date` (standard on most Linux systems)
 - [Waybar](https://github.com/Alexays/Waybar)
-- A [Nerd Font](https://www.nerdfonts.com/) for tooltip icons
+- A [Nerd Font](https://www.nerdfonts.com/) for tooltip icons (recommended; required only for the framed tooltip — see [Framed tooltip](#framed-tooltip))
 - (Optional) [Font Awesome](https://fontawesome.com/) ≥ 7.2.0 OTF for the Claude brand icon
 
 ## Installation
@@ -351,6 +351,16 @@ With --tooltip-pace-pts:
 ```
 
 The marker color adapts to the active theme. Without this flag, the tooltip is unchanged.
+
+### Framed tooltip
+
+By default the tooltip is **plain** (no border) and renders in your Waybar font, so it looks right with any font. Pass `--frame` to draw the bordered "card" instead:
+
+```bash
+claudebar --frame
+```
+
+Framed mode pins `JetBrainsMono Nerd Font Mono` so the box, bars and icons stay aligned regardless of your bar font — install a Nerd Font Mono (e.g. `ttf-jetbrains-mono-nerd`) for it to render correctly.
 
 ### Spacing
 
