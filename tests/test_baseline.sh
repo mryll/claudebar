@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034  # fixtures referenced indirectly via ${!fx_name}
-# Backward-compat guard: NO behavior change for existing usage. Compares the current
-# script vs the immediate pre-remaining commit, same instant (tooltip embeds wall-clock
-# time), over a matrix of fixtures × existing flags — all WITHOUT --remaining.
+# Backward-compat guard: NO accidental output change. Compares the current script
+# vs the last commit with an intentionally accepted output (bump BASE_REF when a
+# release changes the output on purpose), same instant (tooltip embeds wall-clock
+# time), over a matrix of fixtures × existing flags.
 source "$(dirname "$0")/lib.sh"
-BASE_REF="${BASE_REF:-199aa43}"
+BASE_REF="${BASE_REF:-ac1f66a}"   # v0.5.0 — plain tooltip default + --frame/--frame-font
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 norm(){ sed 's/Updated [0-9][0-9]:[0-9][0-9]/Updated XX:XX/g'; }
 base="$(mktemp)"
