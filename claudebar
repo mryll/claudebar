@@ -120,8 +120,21 @@ CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e" # Claude CLI OAuth client ID
 REFRESH_BUFFER=300 # refresh 5 min before expiry
 CACHE_DIR="$HOME/.cache/claudebar"
 CACHE_TTL=60 # seconds
-NET_RETRIES=3     # attempts for transient (no-HTTP-response) network failures
-NET_RETRY_DELAY=3 # seconds between attempts
+
+# Transient (no-HTTP-response) failures retry on a deadline budget, not a fixed
+# attempt count. Boot-like starts (no cache, or cache older than
+# NET_BOOT_CACHE_AGE) poll up to NET_LONG_BUDGET seconds: at the first Waybar
+# exec there is nothing better to show than an empty module, and on re-execs
+# the bar keeps the previous output while we wait — waiting beats rendering
+# day-old data for a full interval. Mid-session blips keep the quick budget.
+# CLAUDEBAR_TEST_NET_* envs let the test suite shrink the budgets; they are
+# not a user interface.
+_env_uint() { if [[ "$1" =~ ^[0-9]+$ ]]; then printf '%s' "$1"; else printf '%s' "$2"; fi; }
+NET_RETRY_DELAY=$(_env_uint "${CLAUDEBAR_TEST_NET_RETRY_DELAY:-}" 2)
+NET_QUICK_BUDGET=$(_env_uint "${CLAUDEBAR_TEST_NET_QUICK_BUDGET:-}" 6)
+NET_LONG_BUDGET=$(_env_uint "${CLAUDEBAR_TEST_NET_LONG_BUDGET:-}" 20)
+NET_BOOT_CACHE_AGE=600 # cache older than this → boot-like start
+NET_WAIT_RECENT=45     # .net_wait younger than this → a sibling already waited
 
 # --- Theme colors ---
 # Blend two hex colors (#RRGGBB) by averaging their RGB components
@@ -213,9 +226,20 @@ die() {
 loading_network() {
     jq -nc \
         --arg t "${BAR_ICON:+${BAR_ICON} }Loading…" \
-        --arg tip "Claude usage is waiting for network.\nWill retry on the next Waybar update." \
+        --arg tip "Waiting for network — no cached usage yet.\nWill retry shortly." \
         '{text:$t, tooltip:$tip, class:"low"}'
     exit 0
+}
+
+# Relative age for stale messaging. Negative (clock skew) → empty, caller omits it.
+rel_age() {
+    local s=$1
+    if   (( s < 0 ));     then return 0
+    elif (( s < 60 ));    then printf 'just now'
+    elif (( s < 3600 ));  then printf '%d min ago' $(( s / 60 ))
+    elif (( s < 86400 )); then printf '%d h ago' $(( s / 3600 ))
+    else printf '%d d ago' $(( s / 86400 ))
+    fi
 }
 
 color_for() {
@@ -360,16 +384,13 @@ rate_tier=$(jq -r 'try (.claudeAiOauth.rateLimitTier // "") catch ""' <<< "$cred
 mkdir -p "$CACHE_DIR"
 cache_file="$CACHE_DIR/usage.json"
 stale_marker="$CACHE_DIR/.stale"
+net_wait_marker="$CACHE_DIR/.net_wait"
 _lockfile="$CACHE_DIR/.fetch.lock"
 
 _fetch_usage() {
-    local cache_age=0
-    if [[ -f "$cache_file" ]]; then
-        cache_age=$(( $(date +%s) - $(date -r "$cache_file" +%s) ))
-        if (( cache_age < CACHE_TTL )); then
-            usage=$(<"$cache_file")
-            return
-        fi
+    if [[ -f "$cache_file" ]] && (( cache_age < CACHE_TTL )); then
+        usage=$(<"$cache_file")
+        return
     fi
 
     if [[ "$auth_ok" == "false" ]]; then
@@ -400,9 +421,9 @@ _fetch_usage() {
     fi
 
     # Auth OK — fetch from API. Transient failures (no HTTP response: DHCP/DNS
-    # still settling at boot, brief blip) are retried before giving up — one
-    # missed dispatch otherwise means stale data for a full Waybar interval.
-    for (( _try = 1; _try <= NET_RETRIES; _try++ )); do
+    # still settling at boot, brief blip) are retried until the shared deadline —
+    # one missed dispatch otherwise means stale data for a full Waybar interval.
+    while :; do
         _resp_body=$(curl -s --max-time 10 -w '\n%{http_code}' "$API_URL" \
             -H "Authorization: Bearer $access_token" \
             -H "anthropic-beta: oauth-2025-04-20") || true
@@ -411,18 +432,21 @@ _fetch_usage() {
         # Normalize bogus codes (e.g. raw body without curl write-out suffix) to 000.
         [[ "$_http_code" =~ ^[0-9]{3}$ ]] || _http_code="000"
         if [[ "$_http_code" != "000" ]]; then break; fi
-        if (( _try < NET_RETRIES )); then sleep "$NET_RETRY_DELAY"; fi
+        if (( SECONDS >= net_deadline )); then break; fi
+        sleep "$NET_RETRY_DELAY"
     done
 
     if [[ "$_http_code" == "200" ]] && [[ -n "$_resp_body" ]] && jq -e '.five_hour' <<< "$_resp_body" &>/dev/null; then
         usage="$_resp_body"
         _ctmp=$(mktemp "$CACHE_DIR/.usage.XXXXXX")
         printf '%s' "$usage" > "$_ctmp" && mv "$_ctmp" "$cache_file"
-        rm -f "$stale_marker" "$CACHE_DIR/.last_error"
+        rm -f "$stale_marker" "$net_wait_marker" "$CACHE_DIR/.last_error"
     elif [[ "$_http_code" == "000" ]]; then
-        # No HTTP response after retries — network still settling or offline.
-        # Same transient handling as the refresh path: reuse recent cache with
-        # an in-memory stale flag (no disk markers), or show neutral "Loading…".
+        # No HTTP response after the retry budget — network still settling or
+        # offline. Mark the episode so sibling instances skip their own long
+        # wait, then reuse recent cache with an in-memory stale flag (no .stale
+        # on disk), or show neutral "Loading…".
+        if [[ "$net_long" == "true" ]]; then touch "$net_wait_marker" 2>/dev/null || true; fi
         if [[ -f "$cache_file" ]] && (( cache_age <= WEEKLY_WINDOW )); then
             usage=$(<"$cache_file")
             transient_stale=true
@@ -446,9 +470,36 @@ _fetch_usage() {
 # read and our refresh attempt; locking and re-reading prevents a stale-token
 # refresh from writing a misleading .last_error while credentials are actually fine.
 exec 9>"$_lockfile"
-flock -w 45 9 || die "Cache lock timeout"
+# Generous wait: a boot-like sibling may hold the lock for the long budget plus
+# in-flight curls (worst ≈ NET_LONG_BUDGET + 25s refresh + 10s fetch ≈ 57s);
+# rendering late beats dying with a visible "Cache lock timeout".
+flock -w 90 9 || die "Cache lock timeout"
+
+# --- Transient retry budget (shared by token refresh and usage fetch) ---
+now_s=$(date +%s)
+cache_age=-1
+[[ -f "$cache_file" ]] && cache_age=$(( now_s - $(date -r "$cache_file" +%s) ))
+# Missing cache or future mtime (clock skew) → boot-like, never "fresh".
+if (( cache_age < 0 )); then cache_age=$(( NET_BOOT_CACHE_AGE + 1 )); fi
+net_budget=$NET_QUICK_BUDGET
+net_long=false
+if (( cache_age > NET_BOOT_CACHE_AGE )); then
+    net_budget=$NET_LONG_BUDGET
+    net_long=true
+    if [[ -f "$net_wait_marker" ]]; then
+        _nw_age=$(( now_s - $(date -r "$net_wait_marker" +%s) ))
+        # A sibling already burned the long budget this episode — single
+        # attempt, no sleeps. Future mtimes (clock skew) don't count.
+        if (( _nw_age >= 0 && _nw_age <= NET_WAIT_RECENT )); then
+            net_budget=0
+            net_long=false
+        fi
+    fi
+fi
+net_deadline=$(( SECONDS + net_budget ))
 
 # Re-read mutable credential fields under the lock.
+[[ -f "$CREDS" ]] || die "No credentials.\nRun <b>claude</b> to log in."
 creds=$(<"$CREDS")
 jq -e . <<< "$creds" &>/dev/null || die "Invalid credentials file.\nRun <b>claude</b> to log in."
 access_token=$(jq -r 'try (.claudeAiOauth.accessToken // empty) catch empty' <<< "$creds")
@@ -457,7 +508,6 @@ expires_at=$(jq -r 'try (.claudeAiOauth.expiresAt // 0) catch 0' <<< "$creds")
 expires_at="${expires_at%%.*}" # truncate float (e.g. 5000.0 → 5000)
 [[ "$expires_at" =~ ^[0-9]+$ ]] || expires_at=0
 expires_s=$(( expires_at / 1000 ))
-now_s=$(date +%s)
 auth_ok=true
 refresh_failure_kind=""
 transient_stale=false
@@ -466,11 +516,11 @@ transient_stale=false
 
 if (( expires_s < now_s + REFRESH_BUFFER )); then
     # Synchronous refresh — 25s timeout covers cold boot when DHCP is still settling.
-    # Transient failures (no HTTP response) are retried — same policy as the
-    # usage fetch — so a cold-boot network race doesn't cost a full interval.
+    # Transient failures (no HTTP response) are retried until the shared deadline —
+    # same policy as the usage fetch — so a cold-boot race doesn't cost a full interval.
     refresh_body=$(jq -nc --arg ci "$CLIENT_ID" --arg rt "$refresh_token" \
                      '{grant_type:"refresh_token", client_id:$ci, refresh_token:$rt}')
-    for (( _try = 1; _try <= NET_RETRIES; _try++ )); do
+    while :; do
         refresh_raw=$(curl -s --max-time 25 -w '\n%{http_code}' -X POST "$TOKEN_URL" \
             -H "Content-Type: application/json" \
             -H "anthropic-beta: oauth-2025-04-20" \
@@ -481,7 +531,8 @@ if (( expires_s < now_s + REFRESH_BUFFER )); then
         # Normalize bogus codes (e.g. raw body without curl write-out suffix) to 000.
         [[ "$refresh_code" =~ ^[0-9]{3}$ ]] || refresh_code="000"
         if [[ "$refresh_code" != "000" ]]; then break; fi
-        if (( _try < NET_RETRIES )); then sleep "$NET_RETRY_DELAY"; fi
+        if (( SECONDS >= net_deadline )); then break; fi
+        sleep "$NET_RETRY_DELAY"
     done
 
     if [[ "$refresh_code" == "200" ]] && [[ -n "$resp" ]] && jq -e '.access_token' <<< "$resp" &>/dev/null; then
@@ -503,8 +554,10 @@ if (( expires_s < now_s + REFRESH_BUFFER )); then
         auth_ok=false
         if [[ "$refresh_code" == "000" ]]; then
             # No HTTP response reached us — DHCP/DNS settling at boot, offline,
-            # or actual timeout. Don't persist; the next dispatch will retry.
+            # or actual timeout. Mark the episode so sibling instances skip
+            # their own long wait; nothing else persists.
             refresh_failure_kind="transient"
+            if [[ "$net_long" == "true" ]]; then touch "$net_wait_marker" 2>/dev/null || true; fi
         else
             refresh_failure_kind="hard"
             # Always write a current .last_error so the tooltip reflects this refresh
@@ -799,10 +852,28 @@ else
     bar_text="<span foreground='${bar_fg}'>${BAR_ICON:+${BAR_ICON} }${bar_text}</span>"
 fi
 
+# --- Stale status note ---
+# One explicit line saying WHY the ⏸ is shown and how old the data is. Used as
+# the footer of the default tooltip and appended to custom tooltips (precedent:
+# the ⏸ icon is already appended outside custom --format).
+_updated="—"
+_data_age=""
+if [[ -f "$cache_file" ]]; then
+    _updated=$(date -r "$cache_file" +%H:%M)
+    _data_age=$(rel_age $(( $(date +%s) - $(date -r "$cache_file" +%s) )))
+fi
+_stale_note=""
+if [[ "${transient_stale:-false}" == "true" ]]; then
+    _stale_note="⏸  Waiting for network — data from ${_updated}${_data_age:+ (${_data_age})}"
+elif [[ -f "$stale_marker" ]]; then
+    _stale_note="⏸  Stale — data from ${_updated}${_data_age:+ (${_data_age})}"
+fi
+
 # --- Tooltip ---
 if [[ -n "$TOOLTIP_FORMAT" ]]; then
     # Custom tooltip via --tooltip-format
     t=$(apply_format "$TOOLTIP_FORMAT")
+    [[ -n "$_stale_note" ]] && t+=$'\n'"<span foreground='${ORANGE}'>${_stale_note}</span>"
 else
     # Default rich Pango tooltip — tooltip-specific bars may carry an elapsed marker.
     tip_session_bar=$(display_bar "$session_pct" "$session_elapsed" "$TOOLTIP_PACE_PTS")
@@ -886,12 +957,14 @@ else
         fi
     fi
 
-    # "Last updated" from cache file mtime (= last successful API fetch)
-    _updated="—"
-    [[ -f "$cache_file" ]] && _updated=$(date -r "$cache_file" +%H:%M)
+    # Footer: explicit stale status, or "Updated HH:MM" when data is fresh.
     lines+=("")
     lines+=("SEP")
-    lines+=(" <span foreground='${DIM}'>  󰅐  Updated ${_updated}</span>")
+    if [[ -n "$_stale_note" ]]; then
+        lines+=(" <span foreground='${ORANGE}'>  ${_stale_note}</span>")
+    else
+        lines+=(" <span foreground='${DIM}'>  󰅐  Updated ${_updated}</span>")
+    fi
 
     # Calculate max width from content
     max_w=0
