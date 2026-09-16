@@ -414,23 +414,55 @@ writable_path() { # writable_path PATH
 # Seconds to wait from a response header block, 0 when there is nothing to
 # honour. Retry-After is a number of seconds OR an HTTP-date (RFC 9110); both
 # appear in the wild, so both are read. The value is clamped: a header is
-# foreign input, and an hour of silence is a bug, not a policy.
+# foreign input, and six hours of silence is a bug, not a policy. The LAST
+# header wins: `-D` writes every block of the exchange (a 1xx before the
+# final answer included), and the final answer is the one that asked.
 _retry_after_seconds() { # _retry_after_seconds HEADER_BLOCK
     local _raw _secs _now
-    _raw=$(printf '%s' "$1" | grep -i -m1 '^retry-after:' | tr -d '\r' \
+    _raw=$(printf '%s' "$1" | grep -i '^retry-after:' | tail -n1 | tr -d '\r' \
            | sed 's/^[^:]*:[[:space:]]*//') || true
     _raw="${_raw#"${_raw%%[![:space:]]*}"}"
+    _raw="${_raw%"${_raw##*[![:space:]]}"}"
     [[ -n "$_raw" ]] || { printf '0'; return 0; }
-    if [[ "$_raw" =~ ^[0-9]+$ ]]; then
-        _secs=$_raw
-    else
+    # Decimal on purpose: bash reads a leading zero as octal (`010` is 8 and
+    # `08` is an arithmetic error), and a value past nine digits overflows
+    # before the clamp below can see it — it IS the clamp.
+    if [[ "$_raw" =~ ^0*([0-9]{1,9})$ ]]; then
+        _secs=${BASH_REMATCH[1]}
+    elif [[ "$_raw" =~ ^[0-9]+$ ]]; then
+        _secs=$RETRY_AFTER_MAX
+    elif [[ "$_raw" =~ ^[A-Z][a-z]{2},\ [0-9]{2}\ [A-Z][a-z]{2}\ [0-9]{4}\ [0-9]{2}:[0-9]{2}:[0-9]{2}\ GMT$ ]]; then
+        # Only the IMF-fixdate form reaches `date -d`. Its parser takes a
+        # `TZ="/path"` prefix and glibc opens that path as a tzfile: a FIFO
+        # there parks the script for ever. The shape check keeps the header a
+        # date; stdin is closed so no descriptor is inherited either.
         _now=$(date +%s)
-        _secs=$(date -d "$_raw" +%s 2>/dev/null) || { printf '0'; return 0; }
+        _secs=$(LC_ALL=C date -d "$_raw" +%s 2>/dev/null </dev/null) || { printf '0'; return 0; }
         _secs=$(( _secs - _now ))
+    else
+        printf '0'; return 0
     fi
     (( _secs < 0 )) && _secs=0
     (( _secs > RETRY_AFTER_MAX )) && _secs=$RETRY_AFTER_MAX
     printf '%s' "$_secs"
+}
+
+# Stage in the cache dir, then rename onto the target: a sibling instance
+# never reads a half-written file, and a FIFO or directory planted at the
+# target between a check and the write cannot park or misdirect us — `-T`
+# makes mv fail on a directory instead of moving the temp INTO it. Returns 1
+# when nothing is on disk, so a caller never announces a wait it did not keep.
+write_atomic() { # write_atomic TARGET TEMPLATE CONTENT
+    local _t
+    _t=$(mktemp "$CACHE_DIR/$2" 2>/dev/null) || return 1
+    if printf '%s' "$3" > "$_t" 2>/dev/null && mv -fT -- "$_t" "$1" 2>/dev/null; then
+        return 0
+    fi
+    rm -f "$_t" 2>/dev/null || true
+    return 1
+}
+persist_retry_at() { # persist_retry_at EPOCH
+    write_atomic "$retry_at_marker" ".retry_at.XXXXXX" "$1"
 }
 
 # Transient (no-HTTP-response) failures retry on a deadline budget, not a fixed
@@ -1023,12 +1055,29 @@ _fetch_usage() {
     # for a forced refresh as well: an early ask is refused AND restarts the
     # window, so a button that asks anyway is a button that keeps the module
     # broken. The wait is in the tooltip through .last_error.
+    # The marker is our own file, but the cache dir is not a vault: a value
+    # that is not a plausible epoch (garbage, a truncated read, octal-looking
+    # zeros, a date past the clamp) is ignored — the next answer rewrites it.
     _retry_at=""
     _retry_at=$(read_bounded "$retry_at_marker" 32) || _retry_at=""
+    local _retry_at_len=${#_retry_at} # before the trim: a full read is a truncated one
     _retry_at="${_retry_at//[[:space:]]/}"
-    [[ "$_retry_at" =~ ^[0-9]+$ ]] || _retry_at=0
     _now=$(date +%s)
+    if (( _retry_at_len < 32 )) && [[ "$_retry_at" =~ ^0*([0-9]{1,10})$ ]]; then
+        _retry_at=${BASH_REMATCH[1]}
+        (( _retry_at > _now + RETRY_AFTER_MAX )) && _retry_at=0
+    else
+        _retry_at=0
+    fi
     if (( _retry_at > _now )); then
+        # The time reaches the tooltip through .last_error, which the 429 wrote.
+        # A token refresh in the meantime removes that file (a refresh that
+        # works clears the previous error), so put it back when it is gone;
+        # an error that is there already is newer than the 429 and stays.
+        if [[ ! -e "$CACHE_DIR/.last_error" ]]; then
+            write_atomic "$CACHE_DIR/.last_error" ".last_error.XXXXXX" \
+                "$(printf '429\nRate limited. Retry at %s.' "$(date -d "@$_retry_at" +%H:%M)")" || true
+        fi
         if [[ -f "$cache_file" ]] && (( cache_age <= WEEKLY_WINDOW )); then
             usage=$(read_bounded "$cache_file" "$MAX_STATE_BYTES") || usage=""
             touch "$stale_marker" 2>/dev/null || true
@@ -1073,10 +1122,15 @@ _fetch_usage() {
     # it) and the body capture must stay parseable, so it cannot go to stdout.
     local -a _hdr_opt=()
     local _hdr_file="" _hdrs="" _retry_secs=0
-    _hdr_file=$(mktemp "$CACHE_DIR/.hdr.XXXXXX" 2>/dev/null) || _hdr_file=""
-    [[ -n "$_hdr_file" ]] && _hdr_opt=(-D "$_hdr_file")
+    # The flock serializes fetches, so a `.hdr.*` that exists here is an
+    # orphan of a run that died mid-transfer; sweep it, then stage a fresh
+    # one per attempt so a death in the retry sleep leaves nothing behind.
+    rm -f "$CACHE_DIR"/.hdr.?????? 2>/dev/null || true
 
     while :; do
+        [[ -n "$_hdr_file" ]] && { rm -f "$_hdr_file" 2>/dev/null || true; }
+        _hdr_file=$(mktemp "$CACHE_DIR/.hdr.XXXXXX" 2>/dev/null) || _hdr_file=""
+        _hdr_opt=(); [[ -n "$_hdr_file" ]] && _hdr_opt=(-D "$_hdr_file")
         # Headers go in through a config file on stdin, never argv: an
         # `-H "Authorization: Bearer …"` sits in /proc/<pid>/cmdline for the
         # whole transfer, readable by every process of this user. The balance
@@ -1109,15 +1163,27 @@ _fetch_usage() {
 
     if [[ -n "$_hdr_file" ]]; then
         _hdrs=$(read_bounded "$_hdr_file" "$MAX_STATE_BYTES") || _hdrs=""
-        rm -f "$_hdr_file"
+        rm -f "$_hdr_file" 2>/dev/null || true
         _retry_secs=$(_retry_after_seconds "$_hdrs")
+    fi
+
+    # A 429 sets the wait BEFORE the cache decides what to show: the first 429
+    # of a fresh install has no cache, and it must not be the one that asks
+    # again. The time is announced only once it is on disk — a wait that was
+    # not kept is a wait the next run will not honour.
+    local _retry_note=""
+    if [[ "$_http_code" == "429" ]] && (( _retry_secs > 0 )); then
+        _retry_at=$(( $(date +%s) + _retry_secs ))
+        if persist_retry_at "$_retry_at"; then
+            _retry_note="Retry at $(date -d "@$_retry_at" +%H:%M)."
+        fi
     fi
 
     if [[ "$_http_code" == "200" ]] && [[ -n "$_resp_body" ]] && jq -e '.five_hour' <<< "$_resp_body" &>/dev/null; then
         usage="$_resp_body"
         _ctmp=$(mktemp "$CACHE_DIR/.usage.XXXXXX")
         printf '%s' "$usage" > "$_ctmp" && mv "$_ctmp" "$cache_file" || rm -f "$_ctmp"
-        rm -f "$stale_marker" "$net_wait_marker" "$retry_at_marker" "$CACHE_DIR/.last_error"
+        rm -f "$stale_marker" "$net_wait_marker" "$retry_at_marker" "$CACHE_DIR/.last_error" 2>/dev/null || true
     elif [[ "$_http_code" == "000" ]]; then
         # No HTTP response after the retry budget — network still settling or
         # offline. Mark the episode so sibling instances skip their own long
@@ -1135,17 +1201,14 @@ _fetch_usage() {
         touch "$stale_marker"
         if [[ "$_http_code" =~ ^[45][0-9]{2}$ ]]; then
             _err_msg=$(jq -r '.error.message // empty' <<< "$_resp_body" 2>/dev/null) || true
-            if [[ "$_http_code" == "429" ]] && (( _retry_secs > 0 )); then
-                _retry_at=$(( $(date +%s) + _retry_secs ))
-                if writable_path "$retry_at_marker"; then
-                    printf '%s' "$_retry_at" > "$retry_at_marker" 2>/dev/null || true
-                fi
-                _err_msg="${_err_msg:+$_err_msg }Retry at $(date -d "@$_retry_at" +%H:%M)."
-            fi
-            if writable_path "$CACHE_DIR/.last_error"; then
-                printf '%s\n%s' "$_http_code" "$_err_msg" > "$CACHE_DIR/.last_error"
-            fi
+            # One line: the readers of .last_error take the second line only.
+            _err_msg="${_err_msg//[$'\r\n']/ }"
+            [[ -n "$_retry_note" ]] && _err_msg="${_err_msg:+$_err_msg }$_retry_note"
+            write_atomic "$CACHE_DIR/.last_error" ".last_error.XXXXXX" \
+                "$(printf '%s\n%s' "$_http_code" "$_err_msg")" || true
         fi
+    elif [[ -n "$_retry_note" ]]; then
+        die "Rate limited.\n$_retry_note"
     else
         die "API request failed.\nCheck your connection."
     fi
@@ -2189,7 +2252,11 @@ else
             lines+=("$_err_line")
             if [[ -n "$_le_msg" ]]; then
                 _wbuf=""
-                for _wword in $_le_msg; do
+                # Split on blanks only: an unquoted expansion would also glob,
+                # and a `*` in an API message would list the cwd in the tooltip.
+                _wwords=()
+                read -ra _wwords <<< "$_le_msg"
+                for _wword in "${_wwords[@]}"; do
                     if [[ -z "$_wbuf" ]]; then
                         _wbuf="$_wword"
                     elif (( ${#_wbuf} + 1 + ${#_wword} <= 35 )); then
