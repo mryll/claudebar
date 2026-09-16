@@ -123,7 +123,7 @@ Run `claudebar --help` for the full reference: the usage line, every flag, and t
 </p>
 
 > [!WARNING]
-> The OAuth usage endpoint and the prepaid-credit endpoint are not documented. The usage endpoint has strict rate limits. An interval of less than 300 seconds will usually cause HTTP 429 errors. Errors are also possible at 300 seconds if the Anthropic service has a problem. If this occurs, the widget shows the data from the cache with a `` pause sign. If the balance is not available, the widget shows it as unknown. It does not show the monthly limit in its place. Refer to [claude-code#30930](https://github.com/anthropics/claude-code/issues/30930).
+> The OAuth usage endpoint and the prepaid-credit endpoint are not documented. The usage endpoint has strict rate limits. An interval of less than 300 seconds will usually cause HTTP 429 errors. Errors are also possible at 300 seconds if the Anthropic service has a problem. If this occurs, the widget shows the data from the cache with a `` pause sign. A 429 answer carries a `Retry-After` header, and the script keeps it: it makes no new request until that second (six hours at most), and the tooltip gives the time. This is necessary because a request inside the window is refused AND starts the window again, so an interval below the window turns one 429 into a permanent one. Each start of Waybar makes a request too, and the header survives a restart because it is on disk. If the balance is not available, the widget shows it as unknown. It does not show the monthly limit in its place. Refer to [claude-code#30930](https://github.com/anthropics/claude-code/issues/30930).
 
 ## Omarchy shell plugin
 
@@ -651,7 +651,7 @@ The script keeps the API response in `~/.cache/claudebar/usage.json` for 60 seco
 | `󰚩` | The script is getting the first data | This is normal at start. The data appears at the next refresh. |
 | `󰚩` ⚠ | Authentication error | Run `claude` to log in |
 | `󰚩` ⚠ | The token has expired | Run `claude` to log in again |
-| `󰚩`  | Old data. The API applied a rate limit. | The widget shows the data from the cache. This corrects itself. |
+| `󰚩`  | Old data. The API applied a rate limit. | The widget shows the data from the cache and the tooltip gives the time of the next request. This corrects itself. |
 | `󰚩` ⚠ | API error | Examine your internet connection |
 | Nothing | The module did not start | Examine the Waybar config and start Waybar again |
 
