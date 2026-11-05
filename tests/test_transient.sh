@@ -135,6 +135,18 @@ rm -rf "$THOME"
 export CLAUDEBAR_TEST_NET_RETRY_DELAY=1
 export CLAUDEBAR_TEST_NET_LONG_BUDGET=1
 
+# --- No 5-hour session open: the API sends five_hour null, still fresh data ---
+NO_SESSION_STUB='#!/usr/bin/env bash
+printf "%s\n200" "{\"five_hour\":null,\"seven_day\":{\"utilization\":12,\"resets_at\":\"2100-01-01T00:00:00Z\"}}"
+'
+_run_transient "$NO_SESSION_STUB" old
+assert_exit0       "no session: exit 0"
+assert_json_valid  "no session: valid JSON"
+assert_text_has    "no session: session shows 0%" "0%"
+assert_tip_has     "no session: weekly is fresh" "12%"
+assert_no_stale    "no session: no .stale on disk"
+rm -rf "$THOME"
+
 # --- REGRESSION: hard HTTP failure (500) still persists .stale + .last_error ---
 HARD_STUB='#!/usr/bin/env bash
 printf "%s\n500" "{\"error\":{\"message\":\"boom\"}}"
