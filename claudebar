@@ -1191,7 +1191,9 @@ _fetch_usage() {
         fi
     fi
 
-    if [[ "$_http_code" == "200" ]] && [[ -n "$_resp_body" ]] && jq -e '.five_hour' <<< "$_resp_body" &>/dev/null; then
+    # `five_hour` is null while no 5-hour session is open (API change, Oct 2026):
+    # the key is what marks a usage payload, not its value.
+    if [[ "$_http_code" == "200" ]] && [[ -n "$_resp_body" ]] && jq -e 'has("five_hour")' <<< "$_resp_body" &>/dev/null; then
         usage="$_resp_body"
         _ctmp=$(mktemp "$CACHE_DIR/.usage.XXXXXX")
         printf '%s' "$usage" > "$_ctmp" && mv "$_ctmp" "$cache_file" || rm -f "$_ctmp"
