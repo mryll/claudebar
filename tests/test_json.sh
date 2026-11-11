@@ -431,6 +431,14 @@ assert_json_valid "--refresh waybar: valid JSON"
 assert_text_has   "--refresh waybar: session pct in text" "42%"
 unset CLAUDEBAR_TEST_NET_QUICK_BUDGET CLAUDEBAR_TEST_NET_LONG_BUDGET CLAUDEBAR_TEST_NET_RETRY_DELAY
 
+echo "== plan labels after the Oct 2026 rename"
+run_claudebar_creds '{"claudeAiOauth":{"accessToken":"x","refreshToken":"y","expiresAt":4102444800000,"subscriptionType":"max","rateLimitTier":"default_claude_max_20x"}}' "$MIN" --json
+assert_jq "Max 20x is Ultra" '.plan' 'Ultra'
+run_claudebar_creds '{"claudeAiOauth":{"accessToken":"x","refreshToken":"y","expiresAt":4102444800000,"subscriptionType":"max","rateLimitTier":"default_claude_max_5x"}}' "$MIN" --json
+assert_jq "Max 5x is Max" '.plan' 'Max'
+run_claudebar_creds '{"claudeAiOauth":{"accessToken":"x","refreshToken":"y","expiresAt":4102444800000,"subscriptionType":"pro","rateLimitTier":"default"}}' "$MIN" --json
+assert_jq "Pro stays Pro" '.plan' 'Pro'
+
 echo "== a plan without a 5-hour limit (five_hour null)"
 NO_SESSION='{"five_hour":null,"seven_day":{"utilization":27,"resets_at":"2030-01-01T00:00:00+00:00"}}'
 run_claudebar "$NO_SESSION" --json

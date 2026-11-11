@@ -1713,9 +1713,11 @@ if [[ "$has_extra" == "true" ]]; then
 fi
 
 # --- Plan label ---
+# Anthropic renamed the Max tiers in Oct 2026: Max 5x is "Max" and Max 20x is
+# "Ultra". The credentials still say max + 5x/20x, and the usage reply carries
+# no plan name.
 plan="${sub_type^}"
-if   [[ "$rate_tier" == *"5x"* ]];  then plan+=" 5x"
-elif [[ "$rate_tier" == *"20x"* ]]; then plan+=" 20x"
+if [[ "$sub_type" == "max" && "$rate_tier" == *"20x"* ]]; then plan="Ultra"
 fi
 
 # --- Pacing ---

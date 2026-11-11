@@ -402,7 +402,7 @@ A Waybar config with a custom format:
 | Placeholder | Description | Example |
 |---|---|---|
 | `{icon}` | The widget mark, in the Nerd Font | `󰚩` |
-| `{plan}` | Plan label | Max 5x |
+| `{plan}` | Plan label | Ultra |
 | `{session_pct}` | Session (5h) usage % | 42 |
 | `{session_remaining_pct}` | Session left % (100 − used) | 58 |
 | `{session_reset}` | Session countdown | 1h 30m |
