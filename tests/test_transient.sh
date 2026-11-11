@@ -142,7 +142,7 @@ printf "%s\n200" "{\"five_hour\":null,\"seven_day\":{\"utilization\":12,\"resets
 _run_transient "$NO_SESSION_STUB" old
 assert_exit0       "no session: exit 0"
 assert_json_valid  "no session: valid JSON"
-assert_text_has    "no session: session shows 0%" "0%"
+assert_text_has    "no session: the bar shows the weekly" "12%"
 assert_tip_has     "no session: weekly is fresh" "12%"
 assert_no_stale    "no session: no .stale on disk"
 rm -rf "$THOME"

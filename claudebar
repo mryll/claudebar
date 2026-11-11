@@ -1191,8 +1191,8 @@ _fetch_usage() {
         fi
     fi
 
-    # `five_hour` is null while no 5-hour session is open (API change, Oct 2026):
-    # the key is what marks a usage payload, not its value.
+    # `five_hour` is null on plans without a 5-hour limit (Ultra, since Oct
+    # 2026): the key is what marks a usage payload, not its value.
     if [[ "$_http_code" == "200" ]] && [[ -n "$_resp_body" ]] && jq -e 'has("five_hour")' <<< "$_resp_body" &>/dev/null; then
         usage="$_resp_body"
         _ctmp=$(mktemp "$CACHE_DIR/.usage.XXXXXX")
@@ -1565,6 +1565,12 @@ display_bar() {  # <used_pct> <elapsed> [marker_on]  (marker_on: pass "$TOOLTIP_
 
 session_pct=$(parse_pct five_hour)
 session_reset=$(parse_reset five_hour)
+# Plans without a 5-hour limit (Ultra since Oct 2026) get `five_hour: null`:
+# no Session row anywhere, and the default bar text shows the weekly window.
+has_session=$(jq 'try (.five_hour != null) catch false' <<< "$usage")
+if [[ "$has_session" != "true" && "$FORMAT_SET" == "false" ]]; then
+    FORMAT="${FORMAT//\{session_/\{weekly_}"
+fi
 weekly_pct=$(parse_pct seven_day)
 weekly_reset=$(parse_reset seven_day)
 
@@ -1707,9 +1713,11 @@ if [[ "$has_extra" == "true" ]]; then
 fi
 
 # --- Plan label ---
+# Anthropic renamed the Max tiers in Oct 2026: Max 5x is "Max" and Max 20x is
+# "Ultra". The credentials still say max + 5x/20x, and the usage reply carries
+# no plan name.
 plan="${sub_type^}"
-if   [[ "$rate_tier" == *"5x"* ]];  then plan+=" 5x"
-elif [[ "$rate_tier" == *"20x"* ]]; then plan+=" 20x"
+if [[ "$sub_type" == "max" && "$rate_tier" == *"20x"* ]]; then plan="Ultra"
 fi
 
 # --- Pacing ---
@@ -1801,8 +1809,8 @@ class=$(severity_for "$max_pct")
 # (session), and a maxed-out OTHER window still reaches the user through the CSS
 # class and the tooltip.
 bar_pct=$session_pct
-if [[ "$FORMAT" != *"{session_pct}"* ]]; then
-    if   [[ "$FORMAT" == *"{weekly_pct}"* ]]; then bar_pct=$weekly_pct
+if [[ "$FORMAT" != *"{session_pct}"* && "$FORMAT" != *"{session_remaining_pct}"* ]]; then
+    if   [[ "$FORMAT" == *"{weekly_pct}"* || "$FORMAT" == *"{weekly_remaining_pct}"* ]]; then bar_pct=$weekly_pct
     elif [[ "$FORMAT" == *"{sonnet_pct}"* ]]; then bar_pct=$sonnet_pct
     fi
 fi
@@ -1867,10 +1875,12 @@ if [[ "$JSON_MODE" == "true" ]]; then
     # thing. `group` names the meter a window belongs to (a model), `label`
     # names the window inside it.
     _win_objs=()
-    _win_objs+=("$(json_window session Session "" "$SESSION_WINDOW" \
-        "$session_pct" "$session_reset" "$session_elapsed" \
-        "$session_pace" "$session_pace_indicator" "$session_pace_delta" \
-        "$session_pace_pct" "$session_pace_pts")")
+    if [[ "$has_session" == "true" ]]; then
+        _win_objs+=("$(json_window session Session "" "$SESSION_WINDOW" \
+            "$session_pct" "$session_reset" "$session_elapsed" \
+            "$session_pace" "$session_pace_indicator" "$session_pace_delta" \
+            "$session_pace_pct" "$session_pace_pts")")
+    fi
     _win_objs+=("$(json_window weekly Weekly "" "$WEEKLY_WINDOW" \
         "$weekly_pct" "$weekly_reset" "$weekly_elapsed" \
         "$weekly_pace" "$weekly_pace_indicator" "$weekly_pace_delta" \
@@ -2197,13 +2207,15 @@ else
     lines+=("CENTER<span font_weight='bold' foreground='${BLUE}'>${_tip_title}</span>")
     lines+=("SEP")
     lines+=("")
-    lines+=(" <span foreground='${FG}'>  󰔟  Session</span>")
-    _lbl_s="$(display_pct "$session_pct")%"
-    add_meter "$session_pct" "$session_elapsed" tip "$session_color" "$_lbl_s"
-    # El pacing vive con el texto que lo explica, no pegado al %: "34% ↓"
-    # se lee como si el USO hubiera bajado. Misma forma que el panel.
-    lines+=(" <span foreground='${DIM}'>  󰥔  Resets in ${s_cd}</span><span foreground='${DIM}'>  ·  ${session_pace_indicator} ${session_pace_pts}</span>")
-    lines+=("")
+    if [[ "$has_session" == "true" ]]; then
+        lines+=(" <span foreground='${FG}'>  󰔟  Session</span>")
+        _lbl_s="$(display_pct "$session_pct")%"
+        add_meter "$session_pct" "$session_elapsed" tip "$session_color" "$_lbl_s"
+        # El pacing vive con el texto que lo explica, no pegado al %: "34% ↓"
+        # se lee como si el USO hubiera bajado. Misma forma que el panel.
+        lines+=(" <span foreground='${DIM}'>  󰥔  Resets in ${s_cd}</span><span foreground='${DIM}'>  ·  ${session_pace_indicator} ${session_pace_pts}</span>")
+        lines+=("")
+    fi
     lines+=(" <span foreground='${FG}'>  󰃰  Weekly</span>")
     _lbl_w="$(display_pct "$weekly_pct")%"
     add_meter "$weekly_pct" "$weekly_elapsed" tip "$weekly_color" "$_lbl_w"
