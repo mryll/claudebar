@@ -431,4 +431,26 @@ assert_json_valid "--refresh waybar: valid JSON"
 assert_text_has   "--refresh waybar: session pct in text" "42%"
 unset CLAUDEBAR_TEST_NET_QUICK_BUDGET CLAUDEBAR_TEST_NET_LONG_BUDGET CLAUDEBAR_TEST_NET_RETRY_DELAY
 
+echo "== a plan without a 5-hour limit (five_hour null)"
+NO_SESSION='{"five_hour":null,"seven_day":{"utilization":27,"resets_at":"2030-01-01T00:00:00+00:00"}}'
+run_claudebar "$NO_SESSION" --json
+assert_exit0     "no session: exit 0"
+assert_jq "no session: no session window"  '[.windows[].id] | index("session")' 'null'
+assert_jq "no session: weekly comes first" '.windows[0].id' 'weekly'
+run_claudebar "$NO_SESSION"
+assert_text_has   "no session: default bar text is the weekly" "27%"
+_plain .tooltip | grep -qF "Session" && _no "no session: no Session row in the tooltip" "tooltip has Session" || _ok "no session: no Session row in the tooltip"
+assert_tip_has    "no session: Weekly row stays" "Weekly"
+run_claudebar "$NO_SESSION" --format "{session_pct}%"
+assert_text_has   "no session: a custom format is left as written" "0%"
+run_claudebar '{"five_hour":null,"seven_day":{"utilization":95,"resets_at":"2030-01-01T00:00:00+00:00"}}' --remaining
+assert_text_has   "no session, --remaining: the bar shows the weekly left" "5%"
+_fg=$(jq -r .text <<<"$OUT" | grep -o "foreground='#[0-9a-fA-F]*'" | head -1)
+run_claudebar '{"five_hour":{"utilization":95,"resets_at":"2030-01-01T00:00:00+00:00"},"seven_day":{"utilization":1,"resets_at":"2030-01-01T00:00:00+00:00"}}' --remaining
+_fg95=$(jq -r .text <<<"$OUT" | grep -o "foreground='#[0-9a-fA-F]*'" | head -1)
+[[ -n "$_fg" && "$_fg" == "$_fg95" ]] && _ok "no session, --remaining: tinted like a 95% window" || _no "no session, --remaining: tinted like a 95% window" "$_fg vs $_fg95"
+run_claudebar "$MIN"
+assert_tip_has    "with a session: Session row stays" "Session"
+assert_text_has   "with a session: default bar text is the session" "42%"
+
 finish
